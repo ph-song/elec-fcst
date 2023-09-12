@@ -1,34 +1,32 @@
 from flask import Flask, jsonify, send_file, request, Response
 from werkzeug.utils import secure_filename
 import pandas as pd
-from flask_mysqldb import MySQL
-#from flask_sqlalchemy import SQLAlchemy
-
 from zipfile import ZipFile
-import zipfile
-from sqlalchemy import text
+from pymongo import MongoClient
+import pymongo
+from pprint import pprint
 
 app = Flask(__name__)
 
+client = MongoClient()
+client = pymongo.MongoClient("mongodb://localhost:27017/")
 
-app.config['MYSQL_HOST'] = '127.0.0.1'
-app.config['MYSQL_USER'] = 'root'
-app.config['MYSQL_PASSWORD'] = ''
-app.config['MYSQL_DB'] = 'elec-fcst'
-mysql = MySQL(app)
+db = client["elec-fcst"]
+data = db["data"] 
 
 @app.route('/', methods = ['GET'])
 def predict():
     '''
     get history data, prediction data or performance
     '''
+    result_7days = data.find(filter={},
+                             projection={'_id': 0},
+                             sort=list({'timestamp': -1}.items()),
+                             limit=7)
+    result = []
+    for res in result_7days:
+        result.append(res)
     
-
-    cursor = mysql.connection.cursor()
-    query = 'SELECT time, load_kw_true FROM data WHERE time >= CURDATE() - INTERVAL 7 DAY ORDER BY time DESC;'
-    cursor.execute(query)
-    result = cursor.fetchall()
-    cursor.close()
     response = jsonify({'data': result}) 
     response.headers.add('Access-Control-Allow-Origin', '*')
     return response
