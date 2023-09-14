@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, send_file, request, Response
+from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import pandas as pd
 from zipfile import ZipFile
@@ -7,28 +8,31 @@ import pymongo
 from pprint import pprint
 
 app = Flask(__name__)
+CORS(app)
 
 client = MongoClient()
 client = pymongo.MongoClient("mongodb://localhost:27017/")
 
 db = client["elec-fcst"]
-data = db["data"] 
+pred_data = db["predict"]  #forecast data collection
+actual_data = db["actual"] #actual data collection
 
 @app.route('/', methods = ['GET'])
 def predict():
     '''
     get history data, prediction data or performance
     '''
-    result_7days = data.find(filter={},
-                             projection={'_id': 0},
-                             sort=list({'timestamp': -1}.items()),
-                             limit=7)
+
+    #get 7 days of data 
+    result_7days = pred_data.find(filter={},
+                                  projection={'_id': 0},
+                                  sort=list({'time': -1}.items()),
+                                  limit=7)
     result = []
     for res in result_7days:
         result.append(res)
-    
     response = jsonify({'data': result}) 
-    response.headers.add('Access-Control-Allow-Origin', '*')
+
     return response
 
 
@@ -39,46 +43,35 @@ def upload():
     question: is it zip file or csv file
     '''
     #unzip file 
+    print(request.files)
     file = request.files['zip_file']  
-    dfs = extract(file) 
-    df, df_true, df_pred = process_data(dfs) 
-
-
+    dfs = extract(file) #extract data from zipped file
+    df_true, df_pred = process_data(dfs) #process dataframes 
     
-    #update database
-    return str(df) + str(df_true) + str(df_pred)
-
-    
-    
-    #upload to database
-
-    #fetch data (2 years)
 
     #predict result ()
   
     #evaluate 
 
     #send predicted data to database
-
-
-    #trigger retrainning LSTM, 
-
-    #1. build XGBoost 2. integrate model and FLask
-
-    return "hello"
+    return 'test'
 
 def extract(file):
     '''
-    take in file opject
-    return list of dataframes
+    take in file object
+    unzip file, read csv files, convert to pd.dataframe, store in a list
+    return the list
     '''
     zip_file = ZipFile(file.stream._file)
-    dfs = [] #set of data frames in zipped file
+    dfs = [] #to store dataframes
+
+    #extract all csv file in zipped file 
     for text_file in zip_file.infolist():
         if text_file.filename.endswith('.csv') and text_file:
             data = pd.read_csv(zip_file.open(text_file.filename), encoding='unicode_escape')
             if not data.empty:
                 dfs.append(data)
+
     return dfs
 
 def process_data(dfs):
@@ -87,52 +80,34 @@ def process_data(dfs):
     take in list of dataframes
     return df, df_true, df_pred
     '''
-    #are columns name gonna be consistent?
-    df, df_true, df_pred = [], [], [] 
+    df_true, df_pred = [], []
     
     for i in range(len(dfs)):
+        #change column name to MongoDB field name 
+        dfs[i] = dfs[i].rename(columns={"Time": 'time', "Load (kW)": "load_kw", 
+                                "Pressure_kpa": "pressure_kpa", 'Cloud Cover (%)': 'cloud__cover_pct',
+                                'Humidity (%)': 'humidity_pct', 'Temperature (C)': 'temperature_c',
+                                'Wind Direction (deg)': 'wind_direction_deg', 'Wind Speed (kmh)':'wind_speed_kmh'})
         dfs[i]['time']= pd.to_datetime(dfs[i]['time']) #format date datatype
+       
 
-        #format column name
-        if dfs[i].shape[1]==6:
-            dfs[i] = dfs[i].rename(columns={"Time": 'time', "Load (kW)": "load_kw_pred", 
-                                    "Pressure_kpa": "pres_kpa_pred", 'Cloud Cover (%)': 'cld_pct_pred',
-                                    'Humidity (%)': 'hmd_pct_pred', 'Temperature (C)': 'temp_c_pred',
-                                    'Wind Direction (deg)': 'wd_deg_pred', 'Wind Speed (kmh)':'ws_kmh_true'})
-            df_pred = dfs[i]
+        if dfs[i].shape[1]==6: #forecast data has 6 columns
+            df_pred = dfs[i] #store data in a variable 
+            pred_data.insert_many(df_pred.to_dict('records')) #insert database
 
-        elif dfs[i].shape[1]==8:
-            dfs[i] = dfs[i].rename(columns={"Time": 'time', "Load (kW)": "load_kw_true", 
-                                    "Pressure_kpa": "pres_kpa_true",'Cloud Cover (%)': 'cld_pct_true',
-                                    'Humidity (%)': 'hmd_pct_true','Temperature (C)': 'temp_c_true',
-                                    'Wind Direction (deg)': 'wd_deg_true','Wind Speed (kmh)':'ws_kmh_true'})
-            df_true = dfs[i]
+        elif dfs[i].shape[1]==8: #actual data has 6 columns
+            df_true = dfs[i] #store data in a variable 
+            actual_data.insert_many(df_true.to_dict('records')) #insert database
 
-        elif dfs[i].shape[1] ==13:
-            df = dfs[i]
-
-    return df, df_true, df_pred
-
-def insert_db():
-    '''
-    df= dfs[i]
-    query = 'INSERT INTO data '
-    for key in df.columns:
-        query = query + key + ' '
-
-        #cur = mysql.connection.cursor()
-        #cur.execute()
-        #mysql.connection.commit()
-
-        #cur = mysql.connection.cursor()
-        #cur.execute()
-        #mysql.connection.commit()
-    '''
+    return df_true, df_pred
 
 def predict():
     '''
     forecast electricity load
     '''
+    #make prediction 
+    #evaluate 
+    #upload predicted and evaluation
     pass
 
 def evaluate():
