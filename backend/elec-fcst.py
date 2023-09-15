@@ -1,11 +1,16 @@
 from flask import Flask, jsonify, send_file, request, Response
 from flask_cors import CORS
-from werkzeug.utils import secure_filename
-import pandas as pd
 from zipfile import ZipFile
+from werkzeug.utils import secure_filename
+
+from datetime import datetime, timedelta
+
 from pymongo import MongoClient
 import pymongo
 from pprint import pprint
+
+import pandas as pd
+import numpy as np
 
 app = Flask(__name__)
 CORS(app)
@@ -29,10 +34,10 @@ def predict():
                                   sort=list({'time': -1}.items()),
                                   limit=7)
     result = []
+    
     for res in result_7days:
         result.append(res)
     response = jsonify({'data': result}) 
-
     return response
 
 
@@ -42,12 +47,11 @@ def upload():
     data preprocessing, data formatting, upload data to database 
     question: is it zip file or csv file
     '''
-    #unzip file 
     print(request.files)
     file = request.files['zip_file']  
     dfs = extract(file) #extract data from zipped file
-    df_true, df_pred = process_data(dfs) #process dataframes 
-    
+    df_true, df_pred = process_data(dfs) #process dataframes
+    get_history(reference_time=df_pred['time'][0], hours = 168)
 
     #predict result ()
   
@@ -71,8 +75,21 @@ def extract(file):
             data = pd.read_csv(zip_file.open(text_file.filename), encoding='unicode_escape')
             if not data.empty:
                 dfs.append(data)
-
     return dfs
+
+def insert_data(df, collection):
+    '''
+    update document if exist
+    else insert
+    '''
+    data = df.to_dict('records')
+    for point in data:
+        #if manage to find one, update, else insert 
+        print(point)
+        is_exist = collection.find_one_and_replace(filter = {'time':point["time"]}, 
+                          replacement = point) #replace if exist
+        if not bool(is_exist):
+            collection.insert_one(point) #insert 
 
 def process_data(dfs):
     '''
@@ -93,22 +110,48 @@ def process_data(dfs):
 
         if dfs[i].shape[1]==6: #forecast data has 6 columns
             df_pred = dfs[i] #store data in a variable 
-            pred_data.insert_many(df_pred.to_dict('records')) #insert database
+            insert_data(df = df_pred, collection=pred_data)  #insert database
 
         elif dfs[i].shape[1]==8: #actual data has 6 columns
             df_true = dfs[i] #store data in a variable 
-            actual_data.insert_many(df_true.to_dict('records')) #insert database
-
+            insert_data(df = df_true, collection=actual_data) #insert database
+    
     return df_true, df_pred
 
-def predict():
+def predict(time):
     '''
     forecast electricity load
+    time: time of first hour of 48 hours prediction
     '''
+    
+    #get pass 168 hours of the data 
+
+
     #make prediction 
     #evaluate 
     #upload predicted and evaluation
     pass
+
+def get_history(reference_time, hours):
+    '''
+    get history data 
+    time: reference time 
+    hours: how many hours of history data to get 
+    '''
+    one_week_ago = reference_time - timedelta(hours=hours)
+    print(one_week_ago, reference_time)
+    result = client['elec-fcst']['actual'].find(
+        filter={'time': {'$gte': one_week_ago, '$lte': reference_time}},
+        projection = {'_id': 0},
+        sort=list({'time': -1}.items())
+        ) #past seven days of data
+    
+    history_data = []
+    for doc in result:
+        history_data.append(doc)
+    print(len(history_data), 123)
+    return history_data
+
 
 def evaluate():
     '''
