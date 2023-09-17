@@ -1,0 +1,213 @@
+---
+title: "lightgbm"
+output: html_document
+date: "2023-09-05"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r warning = FALSE, message=FALSE}
+data <- read.csv("./data/cleaned_actual.csv")
+
+# Assuming your date column is named 'Time' and setting it as a date column
+data$Time <- as.POSIXct(data$Time, format="%Y-%m-%d %H:%M", tz="UTC")
+
+# Creating 168-lags (if not created before)
+data <- data %>%
+  arrange(Time) %>%
+  mutate(across(-Time, list(lag_168 = ~ lag(.x, 168)), .names = "lag168_{col}"))
+
+# Remove rows with NAs
+data <- data %>% drop_na()
+
+library(dplyr)
+
+# Find the most recent date in the dataset
+most_recent_date <- max(data$Time)
+
+# Calculate the date 3 years before the most recent date
+start_date <- as.POSIXct(most_recent_date - lubridate::years(3), tz="UTC")
+
+# Filter the data to include only the last 3 years
+data <- data %>% filter(Time >= start_date)
+
+set.seed(666)
+sample_size <- nrow(data)
+train_index <- 1:(sample_size * 0.8)
+val_index <- (sample_size * 0.8 + 1):(sample_size * 0.9)
+test_index <- (sample_size * 0.9 + 1):sample_size
+
+train_data <- data[train_index, ]
+val_data <- data[val_index, ]
+test_data <- data[test_index, ]
+
+
+# Now data_last_3_years contains only the most recent 3 years of data
+library(lightgbm)
+
+# Create LightGBM datasets
+dtrain <- lgb.Dataset(data = as.matrix(train_data[, grepl("lag168_", names(train_data))]), label = train_data$Load..kW.)
+dval <- lgb.Dataset(data = as.matrix(val_data[, grepl("lag168_", names(val_data))]), label = val_data$Load..kW.)
+
+param_grid <- expand.grid(
+  max_depth = seq(2, 10, 2), 
+  num_leaves = c(7, 15, 31),  # Reduced the number of options
+  learning_rate = seq(0.01, 0.3, by = 0.1),  # Increased the step size
+  subsample = seq(0.5, 1, by = 0.25),  # Increased the step size
+  colsample_bytree = seq(0.5, 1, by = 0.25)  # Increased the step size
+)
+
+best_model <- NULL
+best_params <- NULL
+best_mae <- Inf
+
+# Loop over all rows in param_grid
+for(i in seq(nrow(param_grid))) {
+  
+  params <- list(
+  objective = "regression",
+  metric = "mae",
+  max_depth = param_grid$max_depth[i], 
+  num_leaves = param_grid$num_leaves[i],  # Adding num_leaves to the params list
+  learning_rate = param_grid$learning_rate[i], 
+  subsample = param_grid$subsample[i],
+  colsample_bytree = param_grid$colsample_bytree[i]
+  )
+  
+  set.seed(123)
+  model <- lgb.train(params, dtrain, 100, valids = list(val = dval), early_stopping_rounds = 10, verbose = 0)
+  
+  # Predict on validation set and calculate MAE
+  val_preds <- predict(model, as.matrix(val_data[, grepl("lag168_", names(val_data))]))
+  mae <- mean(abs(val_data$Load..kW. - val_preds))
+  
+  # If this model has the best MAE so far, update best_model and best_mae
+  if(mae < best_mae) {
+    best_model <- model
+    best_params <- params
+    best_mae <- mae
+  }
+}
+
+# best_model now contains the model with the best performance on the validation set
+print(best_params)
+print(best_mae)
+```
+
+
+
+```{r}
+library(tidyverse)
+library(forecast)
+library(fpp3)
+feb01 <- read.csv("./data/test/Actuals_Feb 01 8AM.csv")
+feb02 <- read.csv("./data/test/Actuals_Feb 02 8AM.csv")
+feb03 <- read.csv("./data/test/Actuals_Feb 03 8AM.csv")
+feb04 <- read.csv("./data/test/Actuals_Feb 04 8AM.csv")
+feb05 <- read.csv("./data/test/Actuals_Feb 05 8AM.csv")
+feb06 <- read.csv("./data/test/Actuals_Feb 06 8AM.csv")
+feb07 <- read.csv("./data/test/Actuals_Feb 07 8AM.csv")
+feb08 <- read.csv("./data/test/Actuals_Feb 08 8AM.csv")
+feb09 <- read.csv("./data/test/Actuals_Feb 09 8AM.csv")
+feb10 <- read.csv("./data/test/Actuals_Feb 10 8AM.csv")
+feb11 <- read.csv("./data/test/Actuals_Feb 11 8AM.csv")
+feb12 <- read.csv("./data/test/Actuals_Feb 12 8AM.csv")
+feb13 <- read.csv("./data/test/Actuals_Feb 13 8AM.csv")
+feb14 <- read.csv("./data/test/Actuals_Feb 14 8AM.csv")
+feb15 <- read.csv("./data/test/Actuals_Feb 15 8AM.csv")
+
+# Remove rows with NAs for the January files
+list_of_dfs <- list(feb01, feb02, feb03, feb04, feb05, feb06, feb07, feb08, feb09, feb10, feb11, feb12, feb13, feb14, feb15)
+list_of_dfs <- lapply(list_of_dfs, function(x) x %>% filter_all(all_vars(!is.na(.))))
+
+training_data <- read.csv("./data/cleaned_actual.csv")
+
+# Set column names for all the jan dataframes
+list_of_dfs <- list(feb01, feb02, feb03, feb04, feb05, feb06, feb07, feb08, feb09, feb10, feb11, feb12, feb13, feb14, feb15)
+
+# Extract column names from df1
+training_data_colnames <- colnames(training_data)
+
+# Apply df1's column names to all the jan dataframes
+list_of_dfs <- lapply(list_of_dfs, function(training_data) {
+  colnames(training_data) <- training_data_colnames
+  return(training_data)
+})
+
+# Convert Time column to POSIXct for all other dataframes
+list_of_dfs <- lapply(list_of_dfs, function(x) {
+  x$Time <- as.POSIXct(x$Time, format="%Y-%m-%d %H:%M", tz="UTC")
+  return(x)
+})
+
+test_data <- rbind(do.call(rbind, list_of_dfs))
+
+training_data$Time <- as.POSIXct(training_data$Time, format="%Y-%m-%d %H:%M", tz="UTC")
+
+whole_data <- rbind(training_data, test_data)
+
+
+whole_data <- whole_data %>%
+  arrange(Time) %>%
+  mutate(across(-Time, list(lag_168 = ~ lag(.x, 168)), .names = "lag168_{col}"))
+```
+
+```{r}
+library(lightgbm)
+
+forecast_lightgbm <- function(best_model, test_data) {
+  
+  # Prepare the features for testing - here we select actual values corresponding to the lagged features
+  X_test <- test_data %>%
+    dplyr::select(-starts_with("lag168_"), -Time) %>% 
+    as.data.frame()
+  
+  # Predict on the test data using the best_model
+  preds <- predict(best_model, as.matrix(X_test))
+  
+  return(preds)
+}
+
+# Define the parameters for lightGBM
+lgb_params <- best_params
+
+# Define the rolling window size and start point for the test data
+roll_size <- 24
+start_test <- nrow(training_data) + 1
+end_data <- nrow(whole_data)
+
+# Initialize a list to store the MAE for each rolling window
+mae_list <- list()
+
+while((start_test + roll_size - 1) <= end_data) {
+  
+  # Create subsets of the data for the current rolling window
+  train_subset <- whole_data[seq_len(start_test - 1), ]
+  test_subset <- whole_data[seq(start_test, start_test + roll_size - 1), ]
+  
+  # Get the LightGBM predictions
+  lightgbm_preds <- forecast_lightgbm(best_model, test_subset)
+  
+  # Calculate the MAE for the LightGBM predictions
+  lightgbm_mae <- mean(abs(test_subset$Load..kW. - lightgbm_preds), na.rm = TRUE)
+  
+  # Store the MAE in the list
+  mae_list[[paste0("Start_", as.character(whole_data$Time[start_test]))]] <- lightgbm_mae
+  
+  # Move the start point for the test data
+  start_test <- start_test + roll_size
+}
+
+# Convert the list of MAEs to a data frame
+mae_df <- data.frame(Date = names(mae_list), MAE = unlist(mae_list), row.names = NULL)
+
+# Get the average MAE over the entire period
+average_mae <- mean(unlist(mae_list), na.rm = TRUE)
+
+average_mae
+
+
+```
+
