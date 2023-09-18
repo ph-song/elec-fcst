@@ -12,6 +12,13 @@ from pprint import pprint
 import pandas as pd
 import numpy as np
 
+import light_gbm
+import xg_boost
+
+import xgboost as xgb
+import lightgbm as lgb
+
+
 app = Flask(__name__)
 CORS(app)
 
@@ -23,7 +30,7 @@ pred_data = db["predict"]  #forecast data collection
 actual_data = db["actual"] #actual data collection
 
 @app.route('/', methods = ['GET'])
-def predict():
+def get_data():
     '''
     get history data, prediction data or performance
     '''
@@ -47,17 +54,15 @@ def upload():
     data preprocessing, data formatting, upload data to database 
     question: is it zip file or csv file
     '''
-    print(request.files)
     file = request.files['zip_file']  
     dfs = extract(file) #extract data from zipped file
     df_true, df_pred = process_data(dfs) #process dataframes
-    get_history(reference_time=df_pred['time'][0], hours = 168)
 
-    #predict result ()
-  
-    #evaluate 
+    time_now = df_true['time'].iloc[-1] + timedelta(hours=1) #time now
+    if time_now.weekday() == 0: #retrain model if day of date is Monday
+        retrain(time_now)
 
-    #send predicted data to database
+    predict(time_now)
     return 'test'
 
 def extract(file):
@@ -85,7 +90,6 @@ def insert_data(df, collection):
     data = df.to_dict('records')
     for point in data:
         #if manage to find one, update, else insert 
-        print(point)
         is_exist = collection.find_one_and_replace(filter = {'time':point["time"]}, 
                           replacement = point) #replace if exist
         if not bool(is_exist):
@@ -102,12 +106,11 @@ def process_data(dfs):
     for i in range(len(dfs)):
         #change column name to MongoDB field name 
         dfs[i] = dfs[i].rename(columns={"Time": 'time', "Load (kW)": "load_kw", 
-                                "Pressure_kpa": "pressure_kpa", 'Cloud Cover (%)': 'cloud__cover_pct',
+                                "Pressure_kpa": "pressure_kpa", 'Cloud Cover (%)': 'cloud_cover_pct',
                                 'Humidity (%)': 'humidity_pct', 'Temperature (C)': 'temperature_c',
                                 'Wind Direction (deg)': 'wind_direction_deg', 'Wind Speed (kmh)':'wind_speed_kmh'})
         dfs[i]['time']= pd.to_datetime(dfs[i]['time']) #format date datatype
        
-
         if dfs[i].shape[1]==6: #forecast data has 6 columns
             df_pred = dfs[i] #store data in a variable 
             insert_data(df = df_pred, collection=pred_data)  #insert database
@@ -118,13 +121,16 @@ def process_data(dfs):
     
     return df_true, df_pred
 
-def predict(time):
+def predict(time_now):
     '''
     forecast electricity load
     time: time of first hour of 48 hours prediction
     '''
-    
-    #get pass 168 hours of the data 
+    data_1w = pd.DataFrame(get_history(reference_time=time_now, weeks = 1))
+    model_lgb = lgb.Booster(model_file='model_lgb.txt')
+    model_xgb = xgb.Booster().load_model("model_xbg.json")
+
+    #loop through time range 
 
 
     #make prediction 
@@ -132,16 +138,16 @@ def predict(time):
     #upload predicted and evaluation
     pass
 
-def get_history(reference_time, hours):
+def get_history(reference_time, hours=0, days=0, weeks=0):
     '''
     get history data 
     time: reference time 
     hours: how many hours of history data to get 
     '''
-    one_week_ago = reference_time - timedelta(hours=hours)
+    one_week_ago = reference_time - timedelta(hours=hours, days=days, weeks=weeks)
     print(one_week_ago, reference_time)
     result = client['elec-fcst']['actual'].find(
-        filter={'time': {'$gte': one_week_ago, '$lte': reference_time}},
+        filter={'time': {'$gte': one_week_ago, '$lt': reference_time}},
         projection = {'_id': 0},
         sort=list({'time': -1}.items())
         ) #past seven days of data
@@ -149,8 +155,7 @@ def get_history(reference_time, hours):
     history_data = []
     for doc in result:
         history_data.append(doc)
-    print(len(history_data), 123)
-    return history_data
+    return pd.DataFrame(history_data)
 
 
 def evaluate():
@@ -159,10 +164,18 @@ def evaluate():
     '''
     pass
 
-def retrain():
+def retrain(time_now):
     '''
     trigger retrain
     '''
+    data_3y = get_history(reference_time=time_now, weeks=156)
+    
+    model_lgb = light_gbm.LightGBM(data_3y)
+    model_lgb.model.save_model('model_lgb.txt')
+
+    model_xbg = xg_boost.XGBoost(data_3y)
+    model_xbg.model.save_model("model_xbg.json")
+
     pass
 
 if __name__ == '__main__':
