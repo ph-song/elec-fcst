@@ -25,8 +25,8 @@ class XGBoost():
         
         train_val_data['load_kw'] = history_data['load_kw'] #retrieve label, 'load_kw'
 
-        train_val_data = train_val_data.drop('time_lag168', axis=1) #drop time_lag168
-        train_val_data.index = history_data['time'] #retrieve 'time' as index
+        #train_val_data = train_val_data.drop('time_lag168', axis=1) #drop time_lag168
+        #train_val_data.index = history_data['time'] #retrieve 'time' as index
 
         train_val_data= train_val_data.dropna(axis=0) #drop rows with NA values (due to shift)
         

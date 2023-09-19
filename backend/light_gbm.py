@@ -19,19 +19,20 @@ class LightGBM():
         for colsample_bytree in [i / 10 for i in range(5, 11)]
     ]
 
-    def __init__(self, history_data):
+    def __init__(self, history_data: pd.DataFrame):
         train_data, val_data =  self.preprocess(history_data)
         self.model, self.params, self.mae = self.train_best_model(train_data, val_data, LightGBM.param_grid)
     
     def preprocess(self, history_data):
         train_val_data = pd.DataFrame([])
+        print(history_data)
         for col in history_data.columns:
             train_val_data[str(col)+'_lag168'] = history_data[str(col)].shift(168) #create lag
-        
+        print(train_val_data.columns)
         train_val_data['load_kw'] = history_data['load_kw'] #retrieve label, 'load_kw'
 
-        train_val_data = train_val_data.drop('time_lag168', axis=1) #drop time_lag168
-        train_val_data.index = history_data['time'] #retrieve 'time' as index
+        #train_val_data = train_val_data.drop('time_lag168', axis=1) #drop time_lag168
+        train_val_data.index = history_data.index #retrieve 'time' as index
 
         train_val_data= train_val_data.dropna(axis=0) #drop rows with NA values (due to shift)
         
@@ -66,7 +67,6 @@ class LightGBM():
         y_val = val_data['load_kw']
         print(X_train.info(), y_train.info())
         
-        
         # Create LightGBM datasets
         dtrain = lgb.Dataset(X_train, label=y_train)
         dval = lgb.Dataset(X_val, label=y_val)
@@ -88,6 +88,7 @@ class LightGBM():
                 best_model = model
                 best_params = params
                 best_mae = mae
+
 
         return best_model, best_params, best_mae
 

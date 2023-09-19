@@ -36,15 +36,25 @@ def get_data():
     '''
 
     #get 7 days of data 
-    result_7days = pred_data.find(filter={},
+    pred_7days = pred_data.find(filter={},
                                   projection={'_id': 0},
                                   sort=list({'time': -1}.items()),
-                                  limit=7)
-    result = []
+                                  limit=168)
+    pred_result = []
     
-    for res in result_7days:
-        result.append(res)
-    response = jsonify({'data': result}) 
+    for res in pred_7days:
+        pred_result.append(res)
+
+    actual_7days = actual_data.find(filter={},
+                                  projection={'_id': 0},
+                                  sort=list({'time': -1}.items()),
+                                  limit=168)
+    actual_result = []
+    
+    for res in actual_7days:
+        actual_result.append(res)
+
+    response = jsonify({'pred': pred_result, 'actual': actual_result}) 
     return response
 
 
@@ -62,7 +72,7 @@ def upload():
     if time_now.weekday() == 0: #retrain model if day of date is Monday
         retrain(time_now)
 
-    predict(time_now)
+    prediction(time_now)
     return 'test'
 
 def extract(file):
@@ -82,16 +92,18 @@ def extract(file):
                 dfs.append(data)
     return dfs
 
-def insert_data(df, collection):
+def insert_data(data, collection):
     '''
     update document if exist
     else insert
     '''
-    data = df.to_dict('records')
+    if isinstance(data, pd.DataFrame):
+        data = data.to_dict('records')
+
     for point in data:
         #if manage to find one, update, else insert 
-        is_exist = collection.find_one_and_replace(filter = {'time':point["time"]}, 
-                          replacement = point) #replace if exist
+        is_exist = collection.find_one_and_update(filter = {'time':point["time"]}, 
+                          update = {'$set':point}) #replace if exist
         if not bool(is_exist):
             collection.insert_one(point) #insert 
 
@@ -113,22 +125,41 @@ def process_data(dfs):
        
         if dfs[i].shape[1]==6: #forecast data has 6 columns
             df_pred = dfs[i] #store data in a variable 
-            insert_data(df = df_pred, collection=pred_data)  #insert database
+            insert_data(data = df_pred, collection=pred_data)  #insert database
 
         elif dfs[i].shape[1]==8: #actual data has 6 columns
             df_true = dfs[i] #store data in a variable 
-            insert_data(df = df_true, collection=actual_data) #insert database
+            insert_data(data = df_true, collection=actual_data) #insert database
     
     return df_true, df_pred
 
-def predict(time_now):
+def prediction(time_now):
     '''
     forecast electricity load
+
+    time_now: point where to start making prediction
     time: time of first hour of 48 hours prediction
     '''
-    data_1w = pd.DataFrame(get_history(reference_time=time_now, weeks = 1))
+    #get history data, sort, add suffix '_lag168', get first 48 hours 
+    data_1w = get_history(reference_time=time_now, weeks = 1).sort_index().add_suffix('_lag168').iloc[:48,:]
+
+    #data frame to store predicted load 
+
     model_lgb = lgb.Booster(model_file='model_lgb.txt')
-    model_xgb = xgb.Booster().load_model("model_xbg.json")
+    model_xgb = xgb.Booster(model_file="model_xbg.json")
+    load_pred_df = [] 
+
+    for i in range(len(data_1w)):
+        X = data_1w.iloc[i,:]
+        lgb_pred = float(model_lgb.predict(X)[0])
+        xgb_pred = float(model_xgb.predict(xgb.DMatrix(X.to_frame().T))[0])
+        time = time_now + timedelta(hours=i)
+        if i < 24:
+            load_pred_df.append({'time':time, 'lgb.load1':lgb_pred, 'xgb.load1':xgb_pred})
+        else:
+            load_pred_df.append({'time':time, 'lgb.load2':lgb_pred, 'xgb.load2':xgb_pred})
+
+    insert_data(load_pred_df, pred_data)
 
     #loop through time range 
 
@@ -140,8 +171,8 @@ def predict(time_now):
 
 def get_history(reference_time, hours=0, days=0, weeks=0):
     '''
-    get history data 
-    time: reference time 
+    return history data of set time range in pd.DataFrame
+    reference time 
     hours: how many hours of history data to get 
     '''
     one_week_ago = reference_time - timedelta(hours=hours, days=days, weeks=weeks)
@@ -155,7 +186,7 @@ def get_history(reference_time, hours=0, days=0, weeks=0):
     history_data = []
     for doc in result:
         history_data.append(doc)
-    return pd.DataFrame(history_data)
+    return pd.DataFrame(history_data).set_index('time', drop=True)
 
 
 def evaluate():
@@ -169,7 +200,6 @@ def retrain(time_now):
     trigger retrain
     '''
     data_3y = get_history(reference_time=time_now, weeks=156)
-    
     model_lgb = light_gbm.LightGBM(data_3y)
     model_lgb.model.save_model('model_lgb.txt')
 
