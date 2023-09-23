@@ -34,27 +34,31 @@ def get_data():
     '''
     get history data, prediction data or performance
     '''
-
     #get 7 days of data 
+
+    #prediction data
     pred_7days = pred_data.find(filter={},
-                                  projection={'_id': 0},
+                                  projection= {'_id': 0, 'time':1,
+                                               'lgb_load1': '$lgb.load1', 'lgb_load2': '$lgb.load2', 
+                                               'xgb_load1': '$xgb.load1', 'xgb_load2': '$xgb.load2'}, 
                                   sort=list({'time': -1}.items()),
                                   limit=168)
-    pred_result = []
+    pred_result = [doc for doc in pred_7days]
+    pred_res = pd.DataFrame(pred_result)
     
-    for res in pred_7days:
-        pred_result.append(res)
 
+    #actaul
     actual_7days = actual_data.find(filter={},
-                                  projection={'_id': 0},
+                                  projection={'_id':0, 'load_kw':1, 'time':1},
                                   sort=list({'time': -1}.items()),
                                   limit=168)
-    actual_result = []
-    
-    for res in actual_7days:
-        actual_result.append(res)
+    actual_result = [doc for doc in actual_7days]
+    actual_res  = pd.DataFrame(actual_result)
 
-    response = jsonify({'pred': pred_result, 'actual': actual_result}) 
+    res = pd.concat([actual_res, pred_res], join='outer', keys='time')
+    res = res.fillna(0).to_dict('records')
+
+    response = jsonify({'predict':pred_result, 'actual': actual_result}) 
     return response
 
 
