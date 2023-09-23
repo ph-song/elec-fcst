@@ -1,9 +1,13 @@
 import { Button, FileInput, H1, H2} from "@blueprintjs/core";
 import { useState, useEffect} from "react";
 import './App.css';
+
+import axios from "axios";
+
 import { Line } from 'react-chartjs-2';
 import Chart from 'chart.js/auto';
-import axios from "axios";
+import 'chartjs-adapter-date-fns';
+
 
 function Forecasting() {
 
@@ -21,19 +25,34 @@ function Forecasting() {
       method: 'get'
     })
     .then((response) =>{
-
       console.log(response.data)
-      const labels = response.data.actual.map((item) => item.time);
-      const values1 = response.data.actual.map((item) => item.load_kw/1000);
-    
 
-      // Create a Chart.js-compatible data structure
+      const labels1 = response.data.actual.map((item) => new Date(item.time));
+      const values1 = response.data.actual.map((item) => item.load_kw/1000);
+      const result1 = labels1.map((value, index) => ({ x: value, y: values1[index] }));
+
+      const labels2 = response.data.predict.filter(item => 'xgb_load1' in item).map(item => new Date(item['time']))
+      const values2 = response.data.predict.filter(item => 'xgb_load1' in item).map(item=>item['xgb_load1'])
+      const result2 = labels2.map((value, index) => ({ x: value, y: values2[index]/1000}));
+
+      const labels3 = response.data.predict.filter(item => 'lgb_load1' in item).map(item => new Date(item['time']))
+      const values3 = response.data.predict.filter(item => 'lgb_load1' in item).map(item=>item['lgb_load1'])
+      const result3 = labels3.map((value, index) => ({ x: value, y: values3[index]/1000}));
+
       const chartData = {
-        labels: labels,
+        //labels: labels,
         datasets: [
           {
             label: 'Electricity Demand',
-            data: values1
+            data: result1
+          },
+          {
+            label: 'XGBoost',
+            data: result2
+          },
+          {
+            label: 'LightGBM',
+            data: result3
           }
         ],
       };
@@ -41,12 +60,14 @@ function Forecasting() {
       const options = {
         scales: {
           x: {
+            type: 'time', time:{unit: 'day'},
             title: {
               display: true,
               text: 'Time', // Customize the y-axis label here
             }
           },
           y: {
+            ticks:{beginAtZero: true, min:0},
             title: {
               display: true,
               text: 'Load (MW)', // Customize the y-axis label here
