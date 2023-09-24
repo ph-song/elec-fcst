@@ -11,12 +11,14 @@ import 'chartjs-adapter-date-fns';
 
 function Forecasting() {
 
-  const [file, setFile] = useState()
+  const [file, setFile] = useState(null)
   const [fileName, setFileName] = useState()
 
+  const [chartData1, setChartData1] = useState({datasets: [{data: [],},],});
+  const [options1, setOptions1]  = useState({scales: {x: {},y: {},}});
 
-  const [chartData, setChartData] = useState({datasets: [{data: [],},],});
-  const [options, setOptions]  = useState({scales: {x: {},y: {},}});
+  const [chartData2, setChartData2] = useState({datasets: [{data: [],},],});
+  const [options2, setOptions2]  = useState({scales: {x: {},y: {},}});
   
   useEffect( () => {
 
@@ -27,20 +29,16 @@ function Forecasting() {
     .then((response) =>{
       console.log(response.data)
 
+      //model prediction
       const labels1 = response.data.actual.map((item) => new Date(item.time));
       const values1 = response.data.actual.map((item) => item.load_kw/1000);
       const result1 = labels1.map((value, index) => ({ x: value, y: values1[index] }));
+      
+      const result2 = parseData(response.data.predict, 'xgb_load')
+      const result3 = parseData(response.data.predict, 'lgb_load')
 
-      const labels2 = response.data.predict.filter(item => 'xgb_load1' in item).map(item => new Date(item['time']))
-      const values2 = response.data.predict.filter(item => 'xgb_load1' in item).map(item=>item['xgb_load1'])
-      const result2 = labels2.map((value, index) => ({ x: value, y: values2[index]/1000}));
-
-      const labels3 = response.data.predict.filter(item => 'lgb_load1' in item).map(item => new Date(item['time']))
-      const values3 = response.data.predict.filter(item => 'lgb_load1' in item).map(item=>item['lgb_load1'])
-      const result3 = labels3.map((value, index) => ({ x: value, y: values3[index]/1000}));
-
-      const chartData = {
-        //labels: labels,
+      const chartData1 = {
+        labels: labels1,
         datasets: [
           {
             label: 'Electricity Demand',
@@ -57,7 +55,7 @@ function Forecasting() {
         ],
       };
       
-      const options = {
+      const options1 = {
         scales: {
           x: {
             type: 'time', time:{unit: 'day'},
@@ -76,14 +74,61 @@ function Forecasting() {
         },
       };
       
-      setOptions(options);
-      setChartData(chartData);  //*/
+      setOptions1(options1);
+      setChartData1(chartData1);  //*/
+
+      //model error
+      const result4 = parseData(response.data.predict, 'xgb_error')
+      const result5 = parseData(response.data.predict, 'lgb_error')
+
+      const chartData2 = {
+        labels: labels1,
+        datasets: [
+          {
+            label: 'XGBoost',
+            data: result4
+          },
+          {
+            label: 'LightGBM',
+            data: result5
+          }
+        ],
+      };
+      
+      const options2 = {
+        scales: {
+          x: {
+            type: 'time', time:{unit: 'day'},
+            title: {
+              display: true,
+              text: 'Time', // Customize the y-axis label here
+            }
+          },
+          y: {
+            ticks:{beginAtZero: true, min:0},
+            title: {
+              display: true,
+              text: 'Absolute Error (MW)', // Customize the y-axis label here
+            },
+          },
+        },
+      };
+      
+      setOptions2(options2);
+      setChartData2(chartData2);  //*/
+
       })
       .catch((error) => {
         console.error('Error fetching data:', error);
       });
     }, [])
 
+  function parseData(data, key){
+    const labels = data.filter(item => key in item && item[key] > 0).map(item => new Date(item['time']))
+    const values = data.filter(item => key in item && item[key] > 0).map(item=>item[key])
+    const result = labels.map((value, index) => ({ x: value, y: values[index]/1000}));
+    return result
+  }
 
   const handleFile = (e)=>{
     const file = e.target.files[0]
@@ -98,6 +143,10 @@ function Forecasting() {
   }
 
   const handleUpload = (e)=>{
+    if (file === null){
+      alert("please upload file")
+      return 
+    }
     const data = new FormData()
     data.append('zip_file', file)//req.fil
     axios({
@@ -106,7 +155,7 @@ function Forecasting() {
       data: data
     })
     .then(function(res){
-      alert(res)
+      alert('file uploaded')
       window.location.reload(false)
     })
     .catch(function(err){
@@ -121,10 +170,16 @@ function Forecasting() {
 
         <div className= ''>
 
-          <H1 className="">Electricity Demand</H1>
+          <H2 className="">Electricity Demand</H2>
 
           <div className="" style={{position: "relative", height:"45vh", width:"90vw"}}>
-            <Line data={chartData} options={options}/>
+            <Line data={chartData1} options={options1}/>
+          </div>
+
+          <H2 className="">Model Error</H2>
+
+          <div className="" style={{position: "relative", height:"45vh", width:"90vw"}}>
+            <Line data={chartData2} options={options2}/>
           </div>
 
           <H2 className=''>Data Upload</H2>
