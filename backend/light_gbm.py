@@ -25,10 +25,10 @@ class LightGBM():
     
     def preprocess(self, history_data):
         train_val_data = pd.DataFrame([])
-        print(history_data)
+        #print(history_data)
         for col in history_data.columns:
             train_val_data[str(col)+'_lag168'] = history_data[str(col)].shift(168) #create lag
-        print(train_val_data.columns)
+        #print(train_val_data.columns)
         train_val_data['load_kw'] = history_data['load_kw'] #retrieve label, 'load_kw'
 
         #train_val_data = train_val_data.drop('time_lag168', axis=1) #drop time_lag168
@@ -65,7 +65,7 @@ class LightGBM():
         y_train = train_data['load_kw']
         X_val = val_data.loc[:, ~val_data.columns.isin(['load_kw'])]
         y_val = val_data['load_kw']
-        print(X_train.info(), y_train.info())
+        #print(X_train.info(), y_train.info())
         
         # Create LightGBM datasets
         dtrain = lgb.Dataset(X_train, label=y_train)

@@ -58,7 +58,7 @@ class XGBoost():
         y_train = train_data['load_kw']
         X_val = val_data.loc[:, ~val_data.columns.isin(['load_kw'])]
         y_val = val_data['load_kw']
-        print(X_train.info(), y_train.info())
+        #print(X_train.info(), y_train.info())
         
         # Create DMatrix
         dtrain = xgb.DMatrix(X_train, label=y_train)
