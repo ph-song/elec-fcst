@@ -38,6 +38,7 @@ function Forecasting() {
       
       const resultPredXGB = parseData(response.data.predict, 'xgb_load')
       const resultPredLGB = parseData(response.data.predict, 'lgb_load')
+      const resultPredCTB = parseData(response.data.predict, 'cat_load')
       const resultPredNaive48 = parseData(response.data.predict, 'n48_load')
       const resultPredNaive168 = parseData(response.data.predict, 'n168_load')
 
@@ -55,6 +56,10 @@ function Forecasting() {
           {
             label: 'LightGBM',
             data: resultPredLGB
+          },
+          {
+            label: 'CatBoost',
+            data: resultPredCTB
           },
           {
             label: 'Naive',
@@ -93,6 +98,7 @@ function Forecasting() {
       //model error
       const resultErrXGB = parseData(response.data.predict, 'xgb_error')
       const resultErrLGB = parseData(response.data.predict, 'lgb_error')
+      const resultErrCTB = parseData(response.data.predict, 'cat_error')
       const resultErrNaive48 = parseData(response.data.predict, 'n48_error')
       const resultErrNaive168 = parseData(response.data.predict, 'n168_error')
 
@@ -105,6 +111,10 @@ function Forecasting() {
           },
           {
             label: 'LightGBM',
+            data: resultErrLGB
+          },
+          {
+            label: 'CatBoost',
             data: resultErrLGB
           },
           {
