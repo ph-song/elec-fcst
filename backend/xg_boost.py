@@ -3,6 +3,9 @@ import pandas as pd
 import xgboost as xgb
 from sklearn.metrics import mean_absolute_error
 from tqdm import tqdm
+import warnings
+
+warnings.filterwarnings("ignore", category=UserWarning, message="Converting data to scipy sparse matrix.")
 
 class XGBoost():
     param_grid = [

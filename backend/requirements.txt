@@ -1,0 +1,10 @@
+flask==2.3.2
+flask_cors==4.0.0
+werkzeug==2.3.6
+pymongo==4.5.0
+pandas==1.5.3
+numpy==1.22.3
+xgboost==2.0.0
+lightgbm==3.3.5
+tqdm==4.66.1
+scikit-learn==1.2.2

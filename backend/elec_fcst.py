@@ -3,7 +3,6 @@ from flask_cors import CORS
 from zipfile import ZipFile
 from werkzeug.utils import secure_filename
 import json
-
 from datetime import datetime, timedelta
 
 from pymongo import MongoClient
@@ -15,9 +14,10 @@ import numpy as np
 
 import light_gbm
 import xg_boost
+import cat_boost
 import xgboost as xgb
 import lightgbm as lgb
-
+import catboost as ctb
 
 app = Flask(__name__)
 CORS(app)
@@ -34,7 +34,8 @@ def get_data():
     '''
     get history data, prediction data or performance
     '''
-    models = ['lgb', 'xgb', 'n48', 'n168']
+    models = ['lgb', 'xgb', 'cat', 'n48', 'n168']
+
     #get 7 days of data 
     projection = {'_id': 0, 'time':1}
     for model in models:
@@ -45,34 +46,16 @@ def get_data():
 
     #prediction data
     pred_7d = pred_data.find(filter={}, sort=list({'time': -1}.items()), limit=168, projection= projection)
-                             #projection= {'_id': 0, 'time':1,
-                             #             'lgb_load1': '$lgb.load1', 'lgb_load2': '$lgb.load2',
-                             #             'xgb_load1': '$xgb.load1', 'xgb_load2': '$xgb.load2',
-                             #             'n48_load1': '$n48.load1', 'n48_load2': '$n48.load2',
-                             #             'n168_load1': '$n168.load1', 'n168_load2': '$n168.load2',
-                             #             'lgb_error1': '$lgb.error1', 'lgb_error2': '$lgb.error2', 
-                             #             'xgb_error1': '$xgb.error1', 'xgb_error2': '$xgb.error2', 
-                             #             'n48_error1': '$n48.error1', 'n48_error2': '$n48.error2',
-                             #             'n168_error1': '$n168.error1', 'n168_error2': '$n168.error2'})
-
     pred_result = [doc for doc in pred_7d]
-
     pred_res = pd.DataFrame(pred_result)
+
+    # mean of load1 & load2 and error1 & error2
     for col in pred_res:
         if col == 'time':
             continue 
         model = col.split('_')[0] if '_' in col else col
         pred_res[model + '_load'] = pred_res[[model+'_load1', model+'_load2']].mean(axis=1)
         pred_res[model + '_error'] = pred_res[[model+'_error1', model+'_error2']].mean(axis=1) 
-        
-    #pred_res['lgb_load'] = pred_res[['lgb_load1', 'lgb_load2']].mean(axis=1)
-    #pred_res['xgb_load'] = pred_res[['xgb_load1', 'xgb_load2']].mean(axis=1) 
-    #pred_res['xgb_error'] = pred_res[['xgb_error1', 'xgb_error2']].mean(axis=1) 
-    #pred_res['lgb_error'] = pred_res[['lgb_error1', 'lgb_error2']].mean(axis=1)  
-    #pred_res['n48_load'] = pred_res[['n48_load1', 'n48_load2']].mean(axis=1) 
-    #pred_res['n48_error'] = pred_res[['n48_error1', 'n48_error2']].mean(axis=1) 
-    #pred_res['n168_load'] = pred_res[['n168_load1', 'n168_load2']].mean(axis=1) 
-    #pred_res['n168_error'] = pred_res[['n168_error1', 'n168_error2']].mean(axis=1) 
 
     pred_res = pred_res.fillna(0).to_dict('records')
 
@@ -179,10 +162,10 @@ def prediction(time_now):
     '''
     #get history data, sort, add suffix '_lag168', get first 48 hours 
     data_1w = get_history(reference_time=time_now, collection=actual_data, weeks = 1).sort_index().add_suffix('_lag168').iloc[:48,:]
-
-    #data frame to store predicted load 
-    model_lgb = lgb.Booster(model_file='model_lgb.txt')
-    model_xgb = xgb.Booster(model_file="model_xbg.json")
+    #load model
+    model_lgb = lgb.Booster(model_file='lgb_model.txt')
+    model_xgb = xgb.Booster(model_file="xbg_model.json")
+    model_cat = ctb.CatBoostRegressor().load_model("cat_model.json", format='json')
 
     load_pred_df = [] #store records of prediction
     for i in range(len(data_1w)):
@@ -191,20 +174,19 @@ def prediction(time_now):
         X = data_1w.iloc[i,:] #1 hour of predictors
         lgb_pred = float(model_lgb.predict(X)[0])  #predict with LightGBM
         xgb_pred = float(model_xgb.predict(xgb.DMatrix(X.to_frame().T))[0]) #predict with XGBoost
+        cat_pred = model_cat.predict(X)
         n48_pred = model_naive(time, lag=48) #predict with seasoal naive (48 hours)
         n168_pred = model_naive(time, lag=168) #predict with seasoal naive (168 hours)
 
-        
-        if i < 24: #first 24 hours
-            load_pred_df.append({'time':time, 'lgb.load1':lgb_pred, 'xgb.load1':xgb_pred, 'n48.load1': n48_pred, 'n168.load1': n168_pred})
+        if i < 24: #first 24 hours dd
+            load_pred_df.append({'time':time, 'lgb.load1':lgb_pred, 'xgb.load1':xgb_pred, 'cat.load1':cat_pred, 'n48.load1': n48_pred, 'n168.load1': n168_pred})
         else: #last 24 hours
-            load_pred_df.append({'time':time, 'lgb.load2':lgb_pred, 'xgb.load2':xgb_pred, 'n48.load2': n48_pred, 'n168.load2': n168_pred})
+            load_pred_df.append({'time':time, 'lgb.load2':lgb_pred, 'xgb.load2':xgb_pred, 'cat.load2':cat_pred, 'n48.load2': n48_pred, 'n168.load2': n168_pred})
     insert_data(load_pred_df, pred_data) #update database
 
     return True
 
 def model_naive(time_now, lag):
-    print(time_now)
     result = get_history(time_now - timedelta(hours=lag), actual_data, excl_ref=False)
     result = result.to_dict('records') # 48hours naive
     result = result[0]['load_kw']
@@ -252,6 +234,7 @@ def evaluate(df_true, reference_time):
                               projection= {'_id': 0, 'time':1,
                                            'lgb_load1': '$lgb.load1', 'lgb_load2': '$lgb.load2', 
                                             'xgb_load1': '$xgb.load1', 'xgb_load2': '$xgb.load2',
+                                            'cat_load1': '$cat.load1', 'cat_load2': '$cat.load2',
                                             'n48_load1': '$n48.load1', 'n48_load2': '$n48.load2',
                                             'n168_load1': '$n168.load1', 'n168_load2': '$n168.load2'})
     pred_res =pd.DataFrame([doc for doc in pred_ytd]) #prediction made yesterday
@@ -275,11 +258,14 @@ def retrain(time_now):
     data_3y = get_history(reference_time=time_now, collection=actual_data, weeks=156)
     print(data_3y.info())
 
+    model_cat = cat_boost.CatBoost(data_3y)
+    model_cat.model.save_model('cat_model.json', format="json")
+
     model_lgb = light_gbm.LightGBM(data_3y) #train LigthGBM
-    model_lgb.model.save_model('model_lgb.txt') #save model
+    model_lgb.model.save_model('lgb_model.txt') #save model
 
     model_xbg = xg_boost.XGBoost(data_3y) #train XGBoost
-    model_xbg.model.save_model("model_xbg.json") #save model
+    model_xbg.model.save_model("xbg_model.json") #save model
 
     pass
 

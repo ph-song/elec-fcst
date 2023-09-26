@@ -6,7 +6,6 @@ import sklearn
 from tqdm import tqdm
 import lightgbm as lgb
 import pandas as pd
-from IPython.display import clear_output
 
 class LightGBM():
     param_grid = [
