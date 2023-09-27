@@ -47,27 +47,39 @@ function Forecasting() {
         datasets: [
           {
             label: 'Electricity Demand',
-            data: result
+            data: result,
+            borderColor: 'rgba(55,162,235,0.5)',
+            backgroundColor: "rgba(55,162,235,0.25)"
           },
           {
             label: 'XGBoost',
-            data: resultPredXGB
+            data: resultPredXGB,
+            borderColor: 'rgba(255,99,132,0.5)',
+            backgroundColor: "rgba(255,99,132,0.25)"
           },
           {
             label: 'LightGBM',
-            data: resultPredLGB
+            data: resultPredLGB,
+            borderColor: 'rgba(255,159,64,0.5)',
+            backgroundColor: "rgba(255,159,64,0.25)"
           },
           {
             label: 'CatBoost',
-            data: resultPredCTB
+            data: resultPredCTB,
+            borderColor: 'rgba(255,205,86,0.75)',
+            backgroundColor: "rgba(255,205,86,0.5)"
           },
           {
             label: 'Naive',
-            data: resultPredNaive48
+            data: resultPredNaive48,
+            borderColor: 'rgba(201,203,207,0.5)',
+            backgroundColor: "rgba(201,203,207,0.25)"
           },
           {
             label: 'Seasonal Naive',
-            data: resultPredNaive168
+            data: resultPredNaive168,
+            borderColor: 'rgba(171,173,177,0.5)',
+            backgroundColor: "rgba(171,173,177,0.25)"
           }
         ],
       };
@@ -103,27 +115,37 @@ function Forecasting() {
       const resultErrNaive168 = parseData(response.data.predict, 'n168_error')
 
       const chartData2 = {
-        labels: labels,
+        labels: extendHourlyTimestamps(labels, 48),
         datasets: [
           {
             label: 'XGBoost',
-            data: resultErrXGB
+            data: resultErrXGB,
+            borderColor: 'rgba(255,99,132,0.5)',
+            backgroundColor: "rgba(255,99,132,0.25)"
           },
           {
             label: 'LightGBM',
-            data: resultErrLGB
+            data: resultErrLGB,
+            borderColor: 'rgba(255,159,64,0.5)',
+            backgroundColor: "rgba(255,159,64,0.25)"
           },
           {
             label: 'CatBoost',
-            data: resultErrLGB
+            data: resultErrLGB,
+            borderColor: 'rgba(255,205,86,0.75)',
+            backgroundColor: "rgba(255,205,86,0.5)"
           },
           {
             label: 'Naive',
-            data: resultErrNaive48
+            data: resultErrNaive48,
+            borderColor: 'rgba(201,203,207,0.5)',
+            backgroundColor: "rgba(201,203,207,0.25)"
           },
           {
             label: 'Seasonal Naive',
-            data: resultErrNaive168
+            data: resultErrNaive168,
+            borderColor: 'rgba(171,173,177,0.5)',
+            backgroundColor: "rgba(171,173,177,0.25)"
           }
         ],
       };
@@ -164,6 +186,20 @@ function Forecasting() {
     return result
   }
 
+  //increment array of timestamp by hour 
+  function extendHourlyTimestamps(existingArray, hours) {
+    existingArray.sort((a, b) => a - b)
+    const lastTimestamp = existingArray[existingArray.length - 1];
+
+    for (let i = 1; i <= hours; i++) {
+      const newDate = new Date(lastTimestamp);
+      newDate.setHours(lastTimestamp.getHours() + i);
+      existingArray.push(newDate);
+    }
+    console.log(existingArray[existingArray.length - 1])
+    return existingArray
+  }
+
   //when a file is uploaded 
   const handleFile = (e)=>{
 
@@ -183,6 +219,7 @@ function Forecasting() {
     setIsLoading(true)
     if (file === null){
       alert("please upload file")
+      setIsLoading(false)
       return 
     }
     const data = new FormData()
@@ -208,20 +245,20 @@ function Forecasting() {
     return (
       <div className="container">
         
-        <H1>Electricity Demand</H1>
+        <H1 >Electricity Demand</H1>
 
-        <div className='row' style={{position: "relative",height:"45vh",  width:"90vw"}}>
+        <div className='row' style={{margin: "10px", position: "relative",height:"45vh",  width:"90vw"}}>
           <H3>Forecast</H3>
           <Line data={chartData1} options={options1}/>
         </div>
 
-        <div className='row'>
-          <H3>Data Upload</H3>
-          <FileInput className='col-xs-10 col-md-6' fill={false} text={fileName} onInputChange={handleFile} large={true}/>
+        <div className='row' style={{ margin: "10px"}}>
+          <H3 >Data Upload</H3>
+          <FileInput className='col-xs-8 col-lg-6' fill={false} text={fileName} onInputChange={handleFile} large={true}/>
           <Button className='col-xs-2' onClick={handleUpload} disabled= {isLoading} large={true}> upload </Button>
         </div>
 
-        <div className='row' style={{position: "relative", height:"45vh", width:"90vw"}}>
+        <div className='row' style={{margin: "10px", osition: "relative", height:"45vh", width:"90vw"}}>
           <H3>Model Error</H3>
           <Line data={chartData2} options={options2}/>
         </div>
