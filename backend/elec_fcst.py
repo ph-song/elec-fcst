@@ -55,7 +55,8 @@ def get_data():
             continue 
         model = col.split('_')[0] if '_' in col else col
         pred_res[model + '_load'] = pred_res[[model+'_load1', model+'_load2']].mean(axis=1)
-        pred_res[model + '_error'] = pred_res[[model+'_error1', model+'_error2']].mean(axis=1) 
+        if model+'_error1' in pred_res and model+'_error2' in pred_res:
+            pred_res[model + '_error'] = pred_res[[model+'_error1', model+'_error2']].mean(axis=1) 
 
     pred_res = pred_res.fillna(0).to_dict('records')
 
@@ -82,11 +83,33 @@ def upload():
 
     evaluate(df_true, reference_time = time_now)
 
+
     if time_now.weekday() == 0: #retrain model if day of date is Monday
         retrain(time_now)
 
     prediction(time_now)
     return 'data uploaded successfully', 200
+
+def get_error(model: str, reference_time, hours=168):
+    '''
+    get past hours time MAE from reference_time of model
+    '''
+
+    #projection
+    projection = {'_id': 0, 'time':1}
+    projection[model+'_error1'] = '$' + model+ '.error1'
+    projection[model+'_error2'] = '$' + model+ '.error2'
+
+    #filter
+    end_date = reference_time
+    start_date = reference_time - timedelta(hours=hours)
+    filter={'time': {'$gte': start_date, '$lt': end_date}}
+
+    #prediction data
+    error_7d = pred_data.find(filter=filter, sort=list({'time': -1}.items()), projection= projection)
+    error_res = pd.DataFrame([doc for doc in error_7d])
+    error = error_res[[model+'_error1', model+'_error2']].mean(skipna=True, axis=1).mean(axis = 0) #error
+    return error
 
 def extract(file):
     '''
@@ -143,6 +166,9 @@ def insert_data(data, collection):
     '''
     if isinstance(data, pd.DataFrame):
         data = data.to_dict('records')
+
+    if not bool(data):
+        return False
     
     for point in data:
         #if manage to find one, update the document
@@ -175,8 +201,8 @@ def prediction(time_now):
         lgb_pred = float(model_lgb.predict(X)[0])  #predict with LightGBM
         xgb_pred = float(model_xgb.predict(xgb.DMatrix(X.to_frame().T))[0]) #predict with XGBoost
         cat_pred = model_cat.predict(X)
-        n48_pred = model_naive(time, lag=48) #predict with seasoal naive (48 hours)
-        n168_pred = model_naive(time, lag=168) #predict with seasoal naive (168 hours)
+        n48_pred = naive_model(time, lag=48) #predict with seasoal naive (48 hours)
+        n168_pred = naive_model(time, lag=168) #predict with seasoal naive (168 hours)
 
         if i < 24: #first 24 hours dd
             load_pred_df.append({'time':time, 'lgb.load1':lgb_pred, 'xgb.load1':xgb_pred, 'cat.load1':cat_pred, 'n48.load1': n48_pred, 'n168.load1': n168_pred})
@@ -186,10 +212,11 @@ def prediction(time_now):
 
     return True
 
-def model_naive(time_now, lag):
+def naive_model(time_now, lag):
     result = get_history(time_now - timedelta(hours=lag), actual_data, excl_ref=False)
-    result = result.to_dict('records') # 48hours naive
-    result = result[0]['load_kw']
+    if not (result.empty):
+        result = result.to_dict('records') # 48hours naive
+        result = result[0]['load_kw']
     return result
 
 
@@ -220,9 +247,11 @@ def get_history(reference_time, collection, hours=0, days=0, weeks=0, excl_ref=T
     history_data = []
     for doc in result:
         history_data.append(doc)
-    if bool(history_data):
-        history_data = pd.DataFrame(history_data).set_index('time', drop=True) 
+    history_data = pd.DataFrame(history_data)
+    if not (history_data.empty):
+        history_data = history_data.set_index('time', drop=True) 
     return history_data
+
 
 def evaluate(df_true, reference_time):
     '''
@@ -237,17 +266,17 @@ def evaluate(df_true, reference_time):
                                             'cat_load1': '$cat.load1', 'cat_load2': '$cat.load2',
                                             'n48_load1': '$n48.load1', 'n48_load2': '$n48.load2',
                                             'n168_load1': '$n168.load1', 'n168_load2': '$n168.load2'})
-    pred_res =pd.DataFrame([doc for doc in pred_ytd]) #prediction made yesterday
-    #print(pred_res, df_true)
-
-    error = pd.DataFrame([])
-    error['time'] = pred_res['time']
-    for col in pred_res:
-        if col == 'time': #skip 'time' column
-            continue
-        model, num = col.split('_')[0] if '_' in col else col, col[-1] #string before first '_' is model name, last char is prediction order
-        error[model + '.error' + num] = (pred_res[col] - df_true['load_kw']).abs() #calculate absolute error
-    insert_data(error, pred_data)
+    pred_result = [doc for doc in pred_ytd]
+    pred_res =pd.DataFrame(pred_result)
+    if not(pred_ytd.alive): #prediction made yesterday
+        error = pd.DataFrame([])
+        error['time'] = pred_res['time']
+        for col in pred_res:
+            if col == 'time': #skip 'time' column
+                continue
+            model, num = col.split('_')[0] if '_' in col else col, col[-1] #string before first '_' is model name, last char is prediction order
+            error[model + '.error' + num] = (pred_res[col] - df_true['load_kw']).abs() #calculate absolute error
+        insert_data(error, pred_data)
 
 
 def retrain(time_now):
