@@ -10,7 +10,6 @@ import pymongo
 from pprint import pprint
 
 import pandas as pd
-import numpy as np
 
 import light_gbm
 import xg_boost
@@ -54,8 +53,9 @@ def get_data():
         if col == 'time':
             continue 
         model = col.split('_')[0] if '_' in col else col
-        pred_res[model + '_load'] = pred_res[[model+'_load1', model+'_load2']].mean(axis=1)
-        if model+'_error1' in pred_res and model+'_error2' in pred_res:
+        pred_res[model + '_load'] = pred_res[[model+'_load1', model+'_load2']].mean(axis=1, skipna=True)
+        
+        if model+'_error1' in pred_res.columns and model+'_error2' in pred_res.columns:
             pred_res[model + '_error'] = pred_res[[model+'_error1', model+'_error2']].mean(axis=1) 
 
     pred_res = pred_res.fillna(0).to_dict('records')
@@ -84,8 +84,8 @@ def upload():
     evaluate(df_true, reference_time = time_now)
 
 
-    if time_now.weekday() == 0: #retrain model if day of date is Monday
-        retrain(time_now)
+    #if time_now.weekday() == 0: #retrain model if day of date is Monday
+    #    retrain(time_now)
 
     prediction(time_now)
     return 'data uploaded successfully', 200
@@ -108,7 +108,8 @@ def get_error(model: str, reference_time, hours=168):
     #prediction data
     error_7d = pred_data.find(filter=filter, sort=list({'time': -1}.items()), projection= projection)
     error_res = pd.DataFrame([doc for doc in error_7d])
-    error = error_res[[model+'_error1', model+'_error2']].mean(skipna=True, axis=1).mean(axis = 0) #error
+    if model+'_error1' in error_res.columns and model+'_error2' in error_res.columns:
+        error = error_res[[model+'_error1', model+'_error2']].mean(skipna=True, axis=1).mean(axis = 0) #error
     return error
 
 def extract(file):
@@ -166,10 +167,7 @@ def insert_data(data, collection):
     '''
     if isinstance(data, pd.DataFrame):
         data = data.to_dict('records')
-
-    if not bool(data):
-        return False
-    
+        
     for point in data:
         #if manage to find one, update the document
         is_exist = collection.find_one_and_update(filter = {'time':point["time"]}, 
@@ -217,6 +215,8 @@ def naive_model(time_now, lag):
     if not (result.empty):
         result = result.to_dict('records') # 48hours naive
         result = result[0]['load_kw']
+    else:
+        result = None
     return result
 
 
