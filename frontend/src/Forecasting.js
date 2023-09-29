@@ -49,7 +49,8 @@ function Forecasting() {
             label: 'Electricity Demand',
             data: result,
             borderColor: 'rgba(55,162,235,0.5)',
-            backgroundColor: "rgba(55,162,235,0.25)"
+            backgroundColor: "rgba(55,162,235,0.25)",
+            lineTension: 0.1 // Adjust this value to control the curvature of the lines
           },
           {
             label: 'XGBoost',
