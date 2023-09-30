@@ -269,7 +269,7 @@ def evaluate(df_true, reference_time):
                                             'n168_load1': '$n168.load1', 'n168_load2': '$n168.load2'})
     pred_result = [doc for doc in pred_ytd]
     pred_res =pd.DataFrame(pred_result)
-    if not(pred_ytd.alive): #prediction made yesterday
+    if pred_ytd.alive: #prediction made yesterday
         error = pd.DataFrame([])
         error['time'] = pred_res['time']
         for col in pred_res:
