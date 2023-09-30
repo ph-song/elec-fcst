@@ -42,6 +42,8 @@ function Forecasting() {
       const resultPredNaive48 = parseData(response.data.predict, 'n48_load')
       const resultPredNaive168 = parseData(response.data.predict, 'n168_load')
 
+      console.log(resultPredLGB)
+
       const chartData1 = {
         labels: labels,
         datasets: [
@@ -132,7 +134,7 @@ function Forecasting() {
           },
           {
             label: 'CatBoost',
-            data: resultErrLGB,
+            data: resultErrCTB,
             borderColor: 'rgba(255,205,86,0.75)',
             backgroundColor: "rgba(255,205,86,0.5)"
           },
@@ -162,6 +164,7 @@ function Forecasting() {
           },
           y: {
             ticks:{beginAtZero: true, min:0},
+            type: 'logarithmic',
             title: {
               display: true,
               text: 'Absolute Error (MW)', // Customize the y-axis label here
