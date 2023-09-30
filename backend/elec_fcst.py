@@ -181,7 +181,7 @@ def insert_data(data, collection):
 
 def prediction1(time_now):
     print(time_now)
-    data_1w = get_history(reference_time=time_now, collection=actual_data, weeks = 1, hours=24).sort_index()
+    data_1w = get_history(reference_time=time_now, collection=actual_data, weeks = 1).sort_index()
     
     model_cat = cat_boost.CatBoost(model_file="cat_model.json", format='json')
     cat_pred = model_cat.predict(data_1w)

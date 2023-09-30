@@ -45,11 +45,14 @@ class LightGBM():
     def predict(self, history_data):
         time_now = history_data.index[-1]+ timedelta(hours=1)
         X_pred = pd.DataFrame([])
-        for i in range(24, 169):
-            X_pred = pd.concat([X_pred, history_data['load_kw'].shift(i).rename('load_kw_lag' + str(i))], axis=1)
+        print(history_data)
+        for i in range(145):
+            X_pred = pd.concat([X_pred, history_data['load_kw'].shift(i).rename('load_kw_lag' + str(i+24))], axis=1)
         
         #X_pred['load_kw'] = history_data['load_kw']
         X_pred = X_pred.dropna(axis=0)
+        print(X_pred.index)
+        X_pred.index = X_pred.index + pd.Timedelta(hours=24)
         print(X_pred)
         
         lgb_pred = []
