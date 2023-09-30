@@ -45,10 +45,13 @@ class CatBoost():
     def predict(self, history_data):
         time_now = history_data.index[-1]+ timedelta(hours=1)
         X_pred = pd.DataFrame([])
-        for i in range(24, 169):
-            X_pred = pd.concat([X_pred, history_data['load_kw'].shift(i).rename('load_kw_lag' + str(i))], axis=1)
+        for i in range(145): #shift(0) == lag24, shift(1) == lag25, ... , shift(144) == lag168
+            #shift load 
+            X_pred = pd.concat([X_pred, history_data['load_kw'].shift(i).rename('load_kw_lag' + str(i+24))], axis=1)
+        
         #X_pred['load_kw'] = history_data['load_kw']
         X_pred = X_pred.dropna(axis=0)
+        X_pred.index = X_pred.index + pd.Timedelta(hours=24) #shift index time
         
         cat_pred = []
         for i in range(len(X_pred)):

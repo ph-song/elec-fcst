@@ -46,13 +46,13 @@ class LightGBM():
         time_now = history_data.index[-1]+ timedelta(hours=1)
         X_pred = pd.DataFrame([])
         print(history_data)
-        for i in range(145):
+        for i in range(145): #shift(0) == lag24, shift(1) == lag25, ... , shift(144) == lag168
+            #shift load 
             X_pred = pd.concat([X_pred, history_data['load_kw'].shift(i).rename('load_kw_lag' + str(i+24))], axis=1)
         
         #X_pred['load_kw'] = history_data['load_kw']
         X_pred = X_pred.dropna(axis=0)
-        print(X_pred.index)
-        X_pred.index = X_pred.index + pd.Timedelta(hours=24)
+        X_pred.index = X_pred.index + pd.Timedelta(hours=24) #shift index time
         print(X_pred)
         
         lgb_pred = []
