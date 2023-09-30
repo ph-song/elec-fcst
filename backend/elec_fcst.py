@@ -4,6 +4,7 @@ from zipfile import ZipFile
 from werkzeug.utils import secure_filename
 import json
 from datetime import datetime, timedelta
+import math 
 
 from pymongo import MongoClient
 import pymongo
@@ -43,7 +44,7 @@ def get_data():
         projection[model+'_error1'] = '$' + model+ '.error1'
         projection[model+'_error2'] = '$' + model+ '.error2'
 
-    #prediction data
+    #latest 168 hours of prediction data
     pred_7d = pred_data.find(filter={}, sort=list({'time': -1}.items()), limit=168, projection= projection)
     pred_result = [doc for doc in pred_7d]
     pred_res = pd.DataFrame(pred_result)
@@ -154,7 +155,7 @@ def process_data(dfs):
             df_pred = dfs[i] #store data in a variable 
             insert_data(data = df_pred, collection=pred_data)  #insert database
 
-        elif dfs[i].shape[1]==8: #actual data has 6 columns
+        elif dfs[i].shape[1]==8: #actual data has 8 columns
             df_true = dfs[i] #store data in a variable 
             insert_data(data = df_true, collection=actual_data) #insert database
     
@@ -295,8 +296,6 @@ def retrain(time_now):
 
     model_xbg = xg_boost.XGBoost(data_3y) #train XGBoost
     model_xbg.model.save_model("xbg_model.json") #save model
-
-    pass
 
 if __name__ == '__main__':
    app.run("0.0.0.0", 888)
