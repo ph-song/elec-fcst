@@ -2,6 +2,7 @@ import pandas as pd
 import catboost as ctb
 from sklearn.metrics import mean_absolute_error
 from tqdm import tqdm
+from datetime import datetime, timedelta
 
 class CatBoost():
 
@@ -21,20 +22,40 @@ class CatBoost():
         for colsample_bylevel in [i / 10 for i in range(5, 11)]
     ]
 
-    def __init__(self, history_data: pd.DataFrame):
-        self.train_data, self.val_data = self.preprocess(history_data)
-        self.model, self.params, self.mae = self.train_best_model(self.train_data, self.val_data)
+    def __init__(self, history_data: pd.DataFrame =False, model_file="", format = ""):
+        if model_file:
+            self.model = ctb.CatBoostRegressor().load_model(fname = model_file, format=format)
+        if history_data:
+            self.train_data, self.val_data = self.preprocess(history_data)
+            self.model, self.params, self.mae = self.train_best_model(self.train_data, self.val_data)
+
+
 
     def preprocess(self, history_data):
         train_val_data = pd.DataFrame([])
-        for col in history_data.columns:
-            if col != 'time':
-                train_val_data[str(col)+'_lag168'] = history_data[str(col)].shift(168)
+
+        for i in range(24, 169):
+            train_val_data['load_kw_lag' + str(i)] = history_data['load_kw'].shift(i)
         train_val_data['load_kw'] = history_data['load_kw']
 
         train_val_data = train_val_data.dropna(axis=0)
         n = len(train_val_data)
         return train_val_data[:int(n*0.9)], train_val_data[int(n*0.9):]
+    
+    def predict(self, history_data):
+        time_now = history_data.index[-1]+ timedelta(hours=1)
+        X_pred = pd.DataFrame([])
+        for i in range(24, 169):
+            X_pred = pd.concat([X_pred, history_data['load_kw'].shift(i).rename('load_kw_lag' + str(i))], axis=1)
+        #X_pred['load_kw'] = history_data['load_kw']
+        X_pred = X_pred.dropna(axis=0)
+        
+        cat_pred = []
+        for i in range(len(X_pred)):
+            #time = time_now + timedelta(hours=i) #increment 'time'
+            X = X_pred.iloc[i,:] #1 hour of predictors
+            cat_pred.append(float(self.model.predict(X)))
+        return cat_pred
 
     def train_best_model(self, train_data, val_data):
         best_model = None

@@ -6,6 +6,7 @@ import sklearn
 from tqdm import tqdm
 import lightgbm as lgb
 import pandas as pd
+from datetime import datetime, timedelta
 
 class LightGBM():
     param_grid = [
@@ -18,16 +19,19 @@ class LightGBM():
         for colsample_bytree in [i / 10 for i in range(5, 11)]
     ]
 
-    def __init__(self, history_data: pd.DataFrame):
-        train_data, val_data =  self.preprocess(history_data)
-        self.model, self.params, self.mae = self.train_best_model(train_data, val_data, LightGBM.param_grid)
+    def __init__(self, history_data: pd.DataFrame = False, model_file=""):
+        if model_file:
+            self.model = lgb.Booster(model_file=model_file)
+        else:
+            self.train_data, self.val_data = self.preprocess(history_data)
+            self.model, self.params, self.mae = self.train_best_model(self.train_data, self.val_data, self.param_grid)
+
     
     def preprocess(self, history_data):
         train_val_data = pd.DataFrame([])
-        #print(history_data)
-        for col in history_data.columns:
-            train_val_data[str(col)+'_lag168'] = history_data[str(col)].shift(168) #create lag
-        #print(train_val_data.columns)
+        for i in range(24, 169):
+            train_val_data['load_kw_lag' + str(i)] = history_data['load_kw'].shift(i)
+
         train_val_data['load_kw'] = history_data['load_kw'] #retrieve label, 'load_kw'
 
         #train_val_data = train_val_data.drop('time_lag168', axis=1) #drop time_lag168
@@ -38,7 +42,23 @@ class LightGBM():
         n = len(train_val_data)
         return train_val_data[:int(n*0.9)], train_val_data[int(n*0.9):]
 
-
+    def predict(self, history_data):
+        time_now = history_data.index[-1]+ timedelta(hours=1)
+        X_pred = pd.DataFrame([])
+        for i in range(24, 169):
+            X_pred = pd.concat([X_pred, history_data['load_kw'].shift(i).rename('load_kw_lag' + str(i))], axis=1)
+        
+        #X_pred['load_kw'] = history_data['load_kw']
+        X_pred = X_pred.dropna(axis=0)
+        print(X_pred)
+        
+        lgb_pred = []
+        for i in range(len(X_pred)):
+            #time = time_now + timedelta(hours=i) #increment 'time'
+            X = X_pred.iloc[i,:] #1 hour of predictors
+            lgb_pred.append(float(self.model.predict(X)))
+        return lgb_pred
+    
     def train_best_model(self, train_data, val_data, param_grid):
         """
         This function trains a LightGBM model using a grid search over the parameter grid 

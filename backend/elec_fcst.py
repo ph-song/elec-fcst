@@ -12,7 +12,7 @@ from pprint import pprint
 
 import pandas as pd
 
-import light_gbm
+import lg_boost
 import xg_boost
 import cat_boost
 import xgboost as xgb
@@ -85,10 +85,11 @@ def upload():
     evaluate(df_true, reference_time = time_now)
 
 
-    #if time_now.weekday() == 0: #retrain model if day of date is Monday
-    #    retrain(time_now)
+    if time_now.weekday() == 0: #retrain model if day of date is Monday
+        retrain(time_now)
 
-    prediction(time_now)
+    #prediction(time_now)
+    prediction1(time_now)
     return 'data uploaded successfully', 200
 
 def get_error(model: str, reference_time, hours=168):
@@ -178,6 +179,33 @@ def insert_data(data, collection):
 
     return True
 
+def prediction1(time_now):
+    print(time_now)
+    data_1w = get_history(reference_time=time_now, collection=actual_data, weeks = 1, hours=24).sort_index()
+    
+    model_cat = cat_boost.CatBoost(model_file="cat_model.json", format='json')
+    cat_pred = model_cat.predict(data_1w)
+
+    model_xgb = xg_boost.XGBoost(model_file="xgb_model.json")
+    xgb_pred = model_xgb.predict(data_1w)
+
+    model_lgb = lg_boost.LightGBM(model_file="lgb_model.txt")
+    lgb_pred = model_lgb.predict(data_1w)
+
+
+    load_pred_df = []
+    print(time_now,123)
+
+    for i in range(len(data_1w)):
+        time = time_now + timedelta(hours=i) #increment 'time'
+        if i <24:
+            load_pred_df.append({'time':time, 'lgb.load1':lgb_pred[i], 'xgb.load1':xgb_pred[i], 'cat.load1':cat_pred[i]})
+        else:
+            load_pred_df.append({'time':time, 'lgb.load2':lgb_pred[i], 'xgb.load2':xgb_pred[i], 'cat.load2':cat_pred[i]})
+        
+    insert_data(load_pred_df, pred_data) #update database
+    pass
+
 def prediction(time_now):
     '''
     forecast electricity load
@@ -187,10 +215,12 @@ def prediction(time_now):
     '''
     #get history data, sort, add suffix '_lag168', get first 48 hours 
     data_1w = get_history(reference_time=time_now, collection=actual_data, weeks = 1).sort_index().add_suffix('_lag168').iloc[:48,:]
+    
     #load model
     model_lgb = lgb.Booster(model_file='lgb_model.txt')
-    model_xgb = xgb.Booster(model_file="xbg_model.json")
+    model_xgb = xgb.Booster(model_file="xgb_model.json")
     model_cat = ctb.CatBoostRegressor().load_model("cat_model.json", format='json')
+
 
     load_pred_df = [] #store records of prediction
     for i in range(len(data_1w)):
@@ -288,14 +318,14 @@ def retrain(time_now):
     data_3y = get_history(reference_time=time_now, collection=actual_data, weeks=156)
     print(data_3y.info())
 
-    model_cat = cat_boost.CatBoost(data_3y)
-    model_cat.model.save_model('cat_model.json', format="json")
+    #model_cat = cat_boost.CatBoost(data_3y)
+    #model_cat.model.save_model('cat_model.json', format="json")
 
-    model_lgb = light_gbm.LightGBM(data_3y) #train LigthGBM
+    model_lgb = lg_boost.LightGBM(data_3y) #train LigthGBM
     model_lgb.model.save_model('lgb_model.txt') #save model
 
-    model_xbg = xg_boost.XGBoost(data_3y) #train XGBoost
-    model_xbg.model.save_model("xbg_model.json") #save model
+    #model_xbg = xg_boost.XGBoost(data_3y) #train XGBoost
+    #model_xbg.model.save_model("xbg_model.json") #save model
 
 if __name__ == '__main__':
    app.run("0.0.0.0", 888)
