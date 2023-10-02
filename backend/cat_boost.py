@@ -33,7 +33,6 @@ class CatBoost():
 
     def preprocess(self, history_data):
         train_val_data = pd.DataFrame([])
-
         for i in range(24, 169):
             train_val_data['load_kw_lag' + str(i)] = history_data['load_kw'].shift(i)
         train_val_data['load_kw'] = history_data['load_kw']
@@ -42,8 +41,9 @@ class CatBoost():
         n = len(train_val_data)
         return train_val_data[:int(n*0.9)], train_val_data[int(n*0.9):]
     
-    def predict(self, history_data):
-        time_now = history_data.index[-1]+ timedelta(hours=1)
+    def predict(self, history_data, cat_pred = None):
+        if cat_pred == None:
+            cat_pred = []
         X_pred = pd.DataFrame([])
         for i in range(145): #shift(0) == lag24, shift(1) == lag25, ... , shift(144) == lag168
             #shift load 
@@ -53,12 +53,18 @@ class CatBoost():
         X_pred = X_pred.dropna(axis=0)
         X_pred.index = X_pred.index + pd.Timedelta(hours=24) #shift index time
         
-        cat_pred = []
+        
         for i in range(len(X_pred)):
             #time = time_now + timedelta(hours=i) #increment 'time'
             X = X_pred.iloc[i,:] #1 hour of predictors
             cat_pred.append(float(self.model.predict(X)))
-        return cat_pred
+            
+        if len(cat_pred) <=24:
+            new_df = pd.DataFrame({'load_kw':cat_pred}, index=pd.date_range(history_data.index[-1] + pd.Timedelta(hours=1), periods=len(cat_pred), freq='H'))
+            history_data = pd.concat([history_data, new_df])
+            return self.predict(history_data[24:], cat_pred)
+        else:
+            return cat_pred
 
     def train_best_model(self, train_data, val_data):
         best_model = None

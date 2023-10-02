@@ -27,7 +27,7 @@ class LightGBM():
             self.model, self.params, self.mae = self.train_best_model(self.train_data, self.val_data, self.param_grid)
 
     
-    def preprocess(self, history_data):
+    def preprocess(self, history_data, lgb_pred = []):
         train_val_data = pd.DataFrame([])
         for i in range(24, 169):
             train_val_data['load_kw_lag' + str(i)] = history_data['load_kw'].shift(i)
@@ -42,10 +42,10 @@ class LightGBM():
         n = len(train_val_data)
         return train_val_data[:int(n*0.9)], train_val_data[int(n*0.9):]
 
-    def predict(self, history_data):
-        time_now = history_data.index[-1]+ timedelta(hours=1)
+    def predict(self, history_data, lgb_pred=None):
+        if lgb_pred == None:
+            lgb_pred = []
         X_pred = pd.DataFrame([])
-        print(history_data)
         for i in range(145): #shift(0) == lag24, shift(1) == lag25, ... , shift(144) == lag168
             #shift load 
             X_pred = pd.concat([X_pred, history_data['load_kw'].shift(i).rename('load_kw_lag' + str(i+24))], axis=1)
@@ -53,14 +53,20 @@ class LightGBM():
         #X_pred['load_kw'] = history_data['load_kw']
         X_pred = X_pred.dropna(axis=0)
         X_pred.index = X_pred.index + pd.Timedelta(hours=24) #shift index time
-        print(X_pred)
+        #print(X_pred)
         
-        lgb_pred = []
         for i in range(len(X_pred)):
             #time = time_now + timedelta(hours=i) #increment 'time'
             X = X_pred.iloc[i,:] #1 hour of predictors
             lgb_pred.append(float(self.model.predict(X)))
-        return lgb_pred
+            
+        if len(lgb_pred) <=24:
+            new_df = pd.DataFrame({'load_kw':lgb_pred}, index=pd.date_range(history_data.index[-1] + pd.Timedelta(hours=1), periods=len(lgb_pred), freq='H'))
+            history_data = pd.concat([history_data, new_df])
+            return self.predict(history_data[24:], lgb_pred)
+        
+        else:
+            return lgb_pred
     
     def train_best_model(self, train_data, val_data, param_grid):
         """
