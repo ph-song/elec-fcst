@@ -81,11 +81,9 @@ def upload():
 
     time_now = df_true['time'].iloc[-1] + timedelta(hours=1) #time now
 
-    
 
-
-    #if time_now.weekday() == 0: #retrain model if day of date is Monday
-    #    retrain(time_now)
+    if time_now.weekday() == 0: #retrain model if day of date is Monday
+        retrain(time_now)
 
     #prediction(time_now)
     prediction1(time_now)
@@ -287,16 +285,14 @@ def evaluate(df_true, reference_time):
     '''
     evaluate electricity load
     '''
-    #print(df_true.iloc[-1], reference_time)
     ytd_time = reference_time - timedelta(days=1) #yesterday timestamp 
+    print(df_true['time'].iloc[0], ytd_time)
     #get yesterday data, flatten it 
     models = ['lgb', 'xgb', 'cat', 'n48', 'n168']
     projection = {'_id': 0, 'time':1}
     for model in models:
         projection[model+'_load1'] =  '$' + model+ '.load1'
         projection[model+'_load2'] =  '$' + model+ '.load2'
-        projection[model+'_error1'] = '$' + model+ '.error1'
-        projection[model+'_error2'] = '$' + model+ '.error2'
     filter={'time': {'$gte': ytd_time, '$lt': reference_time}}
     pred_ytd = pred_data.find(filter=filter,projection= projection)
     pred_result = [doc for doc in pred_ytd]

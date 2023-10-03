@@ -222,7 +222,7 @@ function Forecasting() {
   const handleUpload = (e)=>{
     setIsLoading(true)
     if (file === null){
-      alert("please upload file")
+      alert("please select file")
       setIsLoading(false)
       return 
     }
@@ -240,7 +240,7 @@ function Forecasting() {
     })
     .catch(function(err){
       setIsLoading(false)
-      alert(err.response.data.msg)
+      alert(err)
       e.preventDefault()
     })
   }
