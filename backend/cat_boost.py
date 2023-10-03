@@ -25,7 +25,7 @@ class CatBoost():
     def __init__(self, history_data: pd.DataFrame =False, model_file="", format = ""):
         if model_file:
             self.model = ctb.CatBoostRegressor().load_model(fname = model_file, format=format)
-        if history_data:
+        else:
             self.train_data, self.val_data = self.preprocess(history_data)
             self.model, self.params, self.mae = self.train_best_model(self.train_data, self.val_data)
 
@@ -34,8 +34,10 @@ class CatBoost():
     def preprocess(self, history_data):
         train_val_data = pd.DataFrame([])
         for i in range(24, 169):
-            train_val_data['load_kw_lag' + str(i)] = history_data['load_kw'].shift(i)
-        train_val_data['load_kw'] = history_data['load_kw']
+            key = 'load_kw_lag' + str(i)
+            train_val_data[key] = history_data['load_kw'].shift(i)
+        train_val_data = pd.concat([train_val_data, history_data['load_kw']], axis=1)
+        #train_val_data['load_kw'] = history_data['load_kw']
 
         train_val_data = train_val_data.dropna(axis=0)
         n = len(train_val_data)

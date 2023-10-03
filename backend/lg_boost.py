@@ -30,8 +30,10 @@ class LightGBM():
     def preprocess(self, history_data, lgb_pred = []):
         train_val_data = pd.DataFrame([])
         for i in range(24, 169):
-            train_val_data['load_kw_lag' + str(i)] = history_data['load_kw'].shift(i)
+            key = 'load_kw_lag' + str(i)
+            train_val_data[key] = history_data['load_kw'].shift(i)
 
+        #train_val_data = pd.concat([train_val_data, history_data['load_kw']], axis=1)
         train_val_data['load_kw'] = history_data['load_kw'] #retrieve label, 'load_kw'
 
         #train_val_data = train_val_data.drop('time_lag168', axis=1) #drop time_lag168
@@ -59,7 +61,7 @@ class LightGBM():
             #time = time_now + timedelta(hours=i) #increment 'time'
             X = X_pred.iloc[i,:] #1 hour of predictors
             lgb_pred.append(float(self.model.predict(X)))
-            
+
         if len(lgb_pred) <=24:
             new_df = pd.DataFrame({'load_kw':lgb_pred}, index=pd.date_range(history_data.index[-1] + pd.Timedelta(hours=1), periods=len(lgb_pred), freq='H'))
             history_data = pd.concat([history_data, new_df])

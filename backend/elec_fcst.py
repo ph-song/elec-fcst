@@ -85,8 +85,7 @@ def upload():
     if time_now.weekday() == 0: #retrain model if day of date is Monday
         retrain(time_now)
 
-    #prediction(time_now)
-    prediction1(time_now)
+    prediction(time_now)
     evaluate(df_true, reference_time = time_now)
     return 'data uploaded successfully', 200
 
@@ -177,7 +176,13 @@ def insert_data(data, collection):
 
     return True
 
-def prediction1(time_now):
+def prediction(time_now):
+    '''
+    forecast electricity load
+
+    time_now: point where to start making prediction
+    time: time of first hour of 48 hours prediction
+    '''
     print(time_now)
     data_1w = get_history(reference_time=time_now, collection=actual_data, weeks = 1).sort_index()
     model_cat = cat_boost.CatBoost(model_file="cat_model.json", format='json')
@@ -209,40 +214,6 @@ def prediction1(time_now):
         
     insert_data(load_pred_df, pred_data) #update database
     pass
-
-def prediction(time_now):
-    '''
-    forecast electricity load
-
-    time_now: point where to start making prediction
-    time: time of first hour of 48 hours prediction
-    '''
-    #get history data, sort, add suffix '_lag168', get first 48 hours 
-    data_1w = get_history(reference_time=time_now, collection=actual_data, weeks = 1).sort_index().add_suffix('_lag168').iloc[:48,:]
-    
-    #load model
-    model_lgb = lgb.Booster(model_file='lgb_model.txt')
-    model_xgb = xgb.Booster(model_file="xgb_model.json")
-    model_cat = ctb.CatBoostRegressor().load_model("cat_model.json", format='json')
-
-    load_pred_df = [] #store records of prediction
-    for i in range(len(data_1w)):
-        time = time_now + timedelta(hours=i) #increment 'time'
-
-        X = data_1w.iloc[i,:] #1 hour of predictors
-        lgb_pred = float(model_lgb.predict(X)[0])  #predict with LightGBM
-        xgb_pred = float(model_xgb.predict(xgb.DMatrix(X.to_frame().T))[0]) #predict with XGBoost
-        cat_pred = model_cat.predict(X)
-        n48_pred = season_naive_model(time, lag=48) #predict with seasoal naive (48 hours)
-        n168_pred = season_naive_model(time, lag=168) #predict with seasoal naive (168 hours)
-
-        if i < 24: #first 24 hours dd
-            load_pred_df.append({'time':time, 'lgb.load1':lgb_pred, 'xgb.load1':xgb_pred, 'cat.load1':cat_pred, 'n48.load1': n48_pred, 'n168.load1': n168_pred})
-        else: #last 24 hours
-            load_pred_df.append({'time':time, 'lgb.load2':lgb_pred, 'xgb.load2':xgb_pred, 'cat.load2':cat_pred, 'n48.load2': n48_pred, 'n168.load2': n168_pred})
-    insert_data(load_pred_df, pred_data) #update database
-
-    return True
 
 def season_naive_model(time_now, lag):
     result = get_history(time_now - timedelta(hours=lag), actual_data, excl_ref=False)
@@ -316,14 +287,14 @@ def retrain(time_now):
     data_3y = get_history(reference_time=time_now, collection=actual_data, weeks=156)
     print(data_3y.info())
 
-    model_cat = cat_boost.CatBoost(data_3y)
-    model_cat.model.save_model('cat_model.json', format="json")
+    #model_cat = cat_boost.CatBoost(data_3y)
+    #model_cat.model.save_model('cat_model.json', format="json")
 
     model_lgb = lg_boost.LightGBM(data_3y) #train LigthGBM
     model_lgb.model.save_model('lgb_model.txt') #save model
 
-    model_xbg = xg_boost.XGBoost(data_3y) #train XGBoost
-    model_xbg.model.save_model("xbg_model.json") #save model
+    #model_xbg = xg_boost.XGBoost(data_3y) #train XGBoost
+    #model_xbg.model.save_model("xbg_model.json") #save model
 
 if __name__ == '__main__':
    app.run("0.0.0.0", 888)

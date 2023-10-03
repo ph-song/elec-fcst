@@ -28,7 +28,8 @@ class XGBoost():
     def preprocess(self, history_data):
         train_val_data = pd.DataFrame([])
         for i in range(24, 169):
-            train_val_data['load_kw_lag' + str(i)] = history_data['load_kw'].shift(i)
+            key = 'load_kw_lag' + str(i)
+            train_val_data[key] = history_data['load_kw'].shift(i)
         
         train_val_data['load_kw'] = history_data['load_kw'] #retrieve label, 'load_kw'
 

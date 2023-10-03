@@ -208,7 +208,7 @@ function Forecasting() {
   const handleFile = (e)=>{
 
     const file = e.target.files[0]
-    if (file.type !== 'application/zip'){
+    if (file.type !== 'application/zip' && file.type !==' application/x-zip-compressed'){
         alert("wrong file format")
         setFileName()
         return
