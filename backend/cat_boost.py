@@ -35,7 +35,8 @@ class CatBoost():
         train_val_data = pd.DataFrame([])
         for i in range(24, 169):
             key = 'load_kw_lag' + str(i)
-            train_val_data[key] = history_data['load_kw'].shift(i)
+            shift_col =  history_data['load_kw'].shift(i).rename(key)
+            train_val_data = pd.concat([train_val_data, shift_col], axis=1)
         train_val_data = pd.concat([train_val_data, history_data['load_kw']], axis=1)
         #train_val_data['load_kw'] = history_data['load_kw']
 

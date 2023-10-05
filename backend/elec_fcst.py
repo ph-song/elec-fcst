@@ -1,10 +1,8 @@
-from flask import Flask, jsonify, send_file, request, Response
+from flask import Flask, jsonify, send_file, request, Response, abort
 from flask_cors import CORS
 from zipfile import ZipFile
 from werkzeug.utils import secure_filename
-import json
 from datetime import datetime, timedelta
-import math 
 
 from pymongo import MongoClient
 import pymongo
@@ -34,7 +32,8 @@ def get_data():
     '''
     get history data, prediction data or performance
     '''
-    models = ['lgb', 'xgb', 'cat', 'n48', 'n168']
+    #models = ['lgb', 'xgb', 'cat', 'n48', 'n168']
+    models = ['lgb', 'n48', 'n168']
 
     #get 7 days of data 
     projection = {'_id': 0, 'time':1}
@@ -126,6 +125,9 @@ def extract(file):
             data = pd.read_csv(zip_file.open(text_file.filename), encoding='unicode_escape')
             if not data.empty:
                 dfs.append(data)
+    if len(dfs)!=2:
+        raise_error('unexpected number of file in zipped folder')
+    
     return dfs
 
 def process_data(dfs):
@@ -146,8 +148,16 @@ def process_data(dfs):
                                         'humidity(%)': 'humidity_pct', 'temperature(c)': 'temperature_c',
                                         'winddirection(deg)': 'wind_direction_deg', 'windspeed(kmh)':'wind_speed_kmh'})
         
+        exp_col_name = ["time", "load_kw","pressure_kpa",'cloud_cover_pct','humidity_pct','temperature_c','wind_direction_deg','wind_speed_kmh']
+        if not all(col_name in exp_col_name for col_name in dfs[i].columns):
+            raise_error('unexpected column name', 400)
+
+        
         dfs[i] = dfs[i].dropna(how='all') #drop row where all values are NA
         dfs[i]['time']= pd.to_datetime(dfs[i]['time']) #format date datatype
+
+        if len(dfs[i]) != 24:
+            raise_error('unexpected number of rows')
 
         if dfs[i].shape[1]==6: #forecast data has 6 columns
             df_pred = dfs[i] #store data in a variable 
@@ -156,6 +166,9 @@ def process_data(dfs):
         elif dfs[i].shape[1]==8: #actual data has 8 columns
             df_true = dfs[i] #store data in a variable 
             insert_data(data = df_true, collection=actual_data) #insert database
+
+        else:
+            raise_error('unexpected number of column')
     
     return df_true, df_pred
 
@@ -183,14 +196,17 @@ def prediction(time_now):
     time_now: point where to start making prediction
     time: time of first hour of 48 hours prediction
     '''
-    print(time_now)
     data_1w = get_history(reference_time=time_now, collection=actual_data, weeks = 1).sort_index()
-    model_cat = cat_boost.CatBoost(model_file="cat_model.json", format='json')
-    cat_pred = model_cat.predict(data_1w)
+    
 
-    model_xgb = xg_boost.XGBoost(model_file="xgb_model.json")
-    xgb_pred = model_xgb.predict(data_1w)
+    #check missing data 
+    data_1w = preprocess_predict(data_1w)
 
+    #model_cat = cat_boost.CatBoost(model_file="cat_model.json", format='json')
+    #cat_pred = model_cat.predict(data_1w)
+
+    #model_xgb = xg_boost.XGBoost(model_file="xgb_model.json")
+    #xgb_pred = model_xgb.predict(data_1w)
     model_lgb = lg_boost.LightGBM(model_file="lgb_model.txt")
     lgb_pred = model_lgb.predict(data_1w)
 
@@ -205,15 +221,47 @@ def prediction(time_now):
     #print(time_now,123)
     for i in range(48): #***
         time = time_now + timedelta(hours=i) #increment 'time'
-        if i < 24: #first 24 hours dd
-            load_pred_df.append({'time':time, 'lgb.load1':lgb_pred[i], 'xgb.load1':xgb_pred[i], 
-                                 'cat.load1':cat_pred[i], 'n48.load1': n48_pred[i], 'n168.load1': n168_pred[i]})
+        if i < 24: #first 24 hours 
+            load_pred_df.append({'time':time, 'lgb.load1': lgb_pred[i], 'n48.load1': n48_pred[i], 'n168.load1': n168_pred[i]})
+
+            #load_pred_df.append({'time':time, 'lgb.load1':lgb_pred[i], 'xgb.load1':xgb_pred[i], 
+            #                     'cat.load1':cat_pred[i], 'n48.load1': n48_pred[i], 'n168.load1': n168_pred[i]})
         else: #last 24 hours
-            load_pred_df.append({'time':time, 'lgb.load2':lgb_pred[i], 'xgb.load2':xgb_pred[i], 
-                                 'cat.load2':cat_pred[i], 'n48.load2': n48_pred[i], 'n168.load2': n168_pred[i]})
+            load_pred_df.append({'time':time, 'lgb.load2': lgb_pred[i], 'n48.load2': n48_pred[i], 'n168.load2': n168_pred[i]})
+
+            #load_pred_df.append({'time':time, 'lgb.load2':lgb_pred[i], 'xgb.load2':xgb_pred[i], 
+            #                     'cat.load2':cat_pred[i], 'n48.load2': n48_pred[i], 'n168.load2': n168_pred[i]})
         
     insert_data(load_pred_df, pred_data) #update database
     pass
+
+def preprocess_predict(data_1w):
+    '''
+    preprocess prediction data 
+    if no missing data, return 
+    elif one day of missing consecutive data, fill it with predicted data
+    else more than one missing day of data raise error 
+    '''
+    if len(data_1w)<168:
+        datetimes = data_1w.index
+        start_datetime = min(datetimes)
+        end_datetime = max(datetimes) 
+        expected_datetimes = [start_datetime + timedelta(hours=i) for i in range((end_datetime - start_datetime).days * 24 + 1)]
+        missing_date = [dt for dt in expected_datetimes if dt not in datetimes]
+
+        if len(data_1w)<(168-24): #more than
+            #missing_date = ",".join(map(str, set(missing_date)))
+            raise_error('missing important data within period' + missing_date) #.date().strftime('%Y-%m-%d')
+
+        else: #fix the gap
+            interp_data = get_history(reference_time=missing_date[-1], collection=pred_data, excl_ref=False,
+                                      hours=24, projection= {'_id':0, 'time': 1, 'load_kw': '$lgb.load1'}) #*** 
+            interp_data.drop(interp_data.index[-1], inplace=True)
+            if len(interp_data)<24:
+                raise_error('missing data')
+            data_1w = pd.concat([data_1w, interp_data]).sort_index()
+    
+    return data_1w
 
 def season_naive_model(time_now, lag):
     result = get_history(time_now - timedelta(hours=lag), actual_data, excl_ref=False)
@@ -225,7 +273,7 @@ def season_naive_model(time_now, lag):
     return result
 
 
-def get_history(reference_time, collection, hours=0, days=0, weeks=0, excl_ref=True):
+def get_history(reference_time, collection, hours=0, days=0, weeks=0, excl_ref=True, projection = {'_id': 0}):
     '''
     return history data of set time range in pd.DataFrame
     reference time: end date is excluded
@@ -239,7 +287,7 @@ def get_history(reference_time, collection, hours=0, days=0, weeks=0, excl_ref=T
     oprt = "$lt" if excl_ref else "$lte"
     result = collection.find(
         filter={'time': {'$gte': start_date, oprt : end_date}},
-        projection = {'_id': 0},
+        projection = projection,
         sort=list({'time': -1}.items())
         ) 
     
@@ -257,9 +305,10 @@ def evaluate(df_true, reference_time):
     evaluate electricity load
     '''
     ytd_time = reference_time - timedelta(days=1) #yesterday timestamp 
-    print(df_true['time'].iloc[0], ytd_time)
+
     #get yesterday data, flatten it 
-    models = ['lgb', 'xgb', 'cat', 'n48', 'n168']
+    #models = ['lgb', 'xgb', 'cat', 'n48', 'n168']
+    models = ['lgb', 'n48', 'n168']
     projection = {'_id': 0, 'time':1}
     for model in models:
         projection[model+'_load1'] =  '$' + model+ '.load1'
@@ -284,8 +333,8 @@ def retrain(time_now):
     trigger retrain
     '''
     #get past 3 years of historical data
-    data_3y = get_history(reference_time=time_now, collection=actual_data, weeks=156)
-    print(data_3y.info())
+    data_3y = get_history(reference_time=time_now, collection=actual_data, weeks=156) 
+    print(data_3y.info(), data_3y.columns)
 
     #model_cat = cat_boost.CatBoost(data_3y)
     #model_cat.model.save_model('cat_model.json', format="json")
@@ -295,6 +344,11 @@ def retrain(time_now):
 
     #model_xbg = xg_boost.XGBoost(data_3y) #train XGBoost
     #model_xbg.model.save_model("xbg_model.json") #save model
+
+@app.route('/')
+def raise_error(error_msg: str, code = 400):
+    abort(Response(error_msg, code))
+
 
 if __name__ == '__main__':
    app.run("0.0.0.0", 888)

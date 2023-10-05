@@ -32,7 +32,7 @@ function Forecasting() {
       console.log(response.data)
 
       //model prediction
-      const labels = response.data.actual.map((item) => new Date(item.time));
+      const labels = response.data.actual.map((item) => new Date(new Date(item.time).toLocaleString('en-US', { timeZone: 'Australia/Sydney' })));
       const values = response.data.actual.map((item) => item.load_kw/1000);
       const result = labels.map((value, index) => ({ x: value, y: values[index] }));
       
@@ -42,18 +42,17 @@ function Forecasting() {
       const resultPredNaive48 = parseData(response.data.predict, 'n48_load')
       const resultPredNaive168 = parseData(response.data.predict, 'n168_load')
 
-      console.log(resultPredLGB)
 
       const chartData1 = {
         labels: labels,
         datasets: [
           {
-            label: 'Electricity Demand',
-            data: result,
-            borderColor: 'rgba(55,162,235,0.5)',
-            backgroundColor: "rgba(55,162,235,0.25)",
-            lineTension: 0.1 // Adjust this value to control the curvature of the lines
+            label: 'LightGBM',
+            data: resultPredLGB,
+            //borderColor: 'rgba(255,159,64,0.5)',
+            //backgroundColor: "rgba(255,159,64,0.25)"
           },
+          /*
           {
             label: 'XGBoost',
             data: resultPredXGB,
@@ -61,28 +60,30 @@ function Forecasting() {
             backgroundColor: "rgba(255,99,132,0.25)"
           },
           {
-            label: 'LightGBM',
-            data: resultPredLGB,
-            borderColor: 'rgba(255,159,64,0.5)',
-            backgroundColor: "rgba(255,159,64,0.25)"
-          },
-          {
             label: 'CatBoost',
             data: resultPredCTB,
             borderColor: 'rgba(255,205,86,0.75)',
             backgroundColor: "rgba(255,205,86,0.5)"
           },
+          */
           {
             label: 'Naive',
             data: resultPredNaive48,
-            borderColor: 'rgba(201,203,207,0.5)',
-            backgroundColor: "rgba(201,203,207,0.25)"
+            //borderColor: 'rgba(201,203,207,0.5)',
+            //backgroundColor: "rgba(201,203,207,0.25)"
           },
           {
             label: 'Seasonal Naive',
             data: resultPredNaive168,
-            borderColor: 'rgba(171,173,177,0.5)',
-            backgroundColor: "rgba(171,173,177,0.25)"
+            //borderColor: 'rgba(171,173,177,0.5)',
+            //backgroundColor: "rgba(171,173,177,0.25)"
+          },
+          {
+            label: 'Electricity Demand',
+            data: result,
+            //borderColor: 'rgba(55,162,235,0.5)',
+            //backgroundColor: "rgba(55,162,235,0.25)",
+            //lineTension: 0.1 // Adjust this value to control the curvature of the lines
           }
         ],
       };
@@ -121,34 +122,37 @@ function Forecasting() {
         labels: extendHourlyTimestamps(labels, 48),
         datasets: [
           {
+            label: 'LightGBM',
+            data: resultErrLGB,
+            //borderColor: 'rgba(255,159,64,0.5)',
+            //backgroundColor: "rgba(255,159,64,0.25)"
+          },
+          /*
+          {
             label: 'XGBoost',
             data: resultErrXGB,
             borderColor: 'rgba(255,99,132,0.5)',
             backgroundColor: "rgba(255,99,132,0.25)"
           },
-          {
-            label: 'LightGBM',
-            data: resultErrLGB,
-            borderColor: 'rgba(255,159,64,0.5)',
-            backgroundColor: "rgba(255,159,64,0.25)"
-          },
+
           {
             label: 'CatBoost',
             data: resultErrCTB,
             borderColor: 'rgba(255,205,86,0.75)',
             backgroundColor: "rgba(255,205,86,0.5)"
           },
+          */
           {
             label: 'Naive',
             data: resultErrNaive48,
-            borderColor: 'rgba(201,203,207,0.5)',
-            backgroundColor: "rgba(201,203,207,0.25)"
+            //borderColor: 'rgba(201,203,207,0.5)',
+            //backgroundColor: "rgba(201,203,207,0.25)"
           },
           {
             label: 'Seasonal Naive',
             data: resultErrNaive168,
-            borderColor: 'rgba(171,173,177,0.5)',
-            backgroundColor: "rgba(171,173,177,0.25)"
+            //borderColor: 'rgba(171,173,177,0.5)',
+            //backgroundColor: "rgba(171,173,177,0.25)"
           }
         ],
       };
@@ -178,7 +182,7 @@ function Forecasting() {
 
       })
       .catch((error) => {
-        console.error('Error fetching data:', error);
+        alert('Error fetching data:', error);
       });
     }, [])
 
@@ -200,7 +204,6 @@ function Forecasting() {
       newDate.setHours(lastTimestamp.getHours() + i);
       existingArray.push(newDate);
     }
-    console.log(existingArray[existingArray.length - 1])
     return existingArray
   }
 
@@ -208,7 +211,7 @@ function Forecasting() {
   const handleFile = (e)=>{
 
     const file = e.target.files[0]
-    if (file.type !== 'application/zip' && file.type !==' application/x-zip-compressed'){
+    if (file.type !== 'application/zip' && file.type !== 'application/x-zip-compressed'){
         alert("wrong file format")
         setFileName()
         return
@@ -240,7 +243,11 @@ function Forecasting() {
     })
     .catch(function(err){
       setIsLoading(false)
+      if (err.response.data){
+        alert(err.response.data)
+    }else{
       alert(err)
+    }
       e.preventDefault()
     })
   }
