@@ -10,9 +10,9 @@ from pprint import pprint
 
 import pandas as pd
 
-import lg_boost
-import xg_boost
-import cat_boost
+import model.lg_boost as lg_boost
+import model.xg_boost as xg_boost
+import model.cat_boost as cat_boost
 import xgboost as xgb
 import lightgbm as lgb
 import catboost as ctb
@@ -79,13 +79,11 @@ def upload():
     df_true, df_pred = process_data(dfs) #process dataframes
 
     time_now = df_true['time'].iloc[-1] + timedelta(hours=1) #time now
-
-
     if time_now.weekday() == 0: #retrain model if day of date is Monday
         retrain(time_now)
-
-    prediction(time_now)
     evaluate(df_true, reference_time = time_now)
+    prediction(time_now)
+    
     return 'data uploaded successfully', 200
 
 def get_error(model: str, reference_time, hours=168):
@@ -250,8 +248,10 @@ def preprocess_predict(data_1w):
         missing_date = [dt for dt in expected_datetimes if dt not in datetimes]
 
         if len(data_1w)<(168-24): #more than
-            #missing_date = ",".join(map(str, set(missing_date)))
-            raise_error('missing important data within period' + missing_date) #.date().strftime('%Y-%m-%d')
+            if bool(missing_date):
+                raise_error('missing data' + str(missing_date[0]) + 'and' +  str(missing_date[-1])) 
+            else: 
+                raise_error('missing data')
 
         else: #fix the gap
             interp_data = get_history(reference_time=missing_date[-1], collection=pred_data, excl_ref=False,
@@ -337,13 +337,13 @@ def retrain(time_now):
     print(data_3y.info(), data_3y.columns)
 
     #model_cat = cat_boost.CatBoost(data_3y)
-    #model_cat.model.save_model('cat_model.json', format="json")
+    #model_cat.model.save_model('./model/cat_model.json', format="json")
 
     model_lgb = lg_boost.LightGBM(data_3y) #train LigthGBM
-    model_lgb.model.save_model('lgb_model.txt') #save model
+    model_lgb.model.save_model('./model/lgb_model.txt') #save model
 
     #model_xbg = xg_boost.XGBoost(data_3y) #train XGBoost
-    #model_xbg.model.save_model("xbg_model.json") #save model
+    #model_xbg.model.save_model("./model/xbg_model.json") #save model
 
 @app.route('/')
 def raise_error(error_msg: str, code = 400):
