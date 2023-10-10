@@ -53,7 +53,8 @@ def get_data():
         if col == 'time':
             continue 
         model = col.split('_')[0] if '_' in col else col
-        pred_res[model + '_load'] = pred_res[[model+'_load1', model+'_load2']].mean(axis=1, skipna=True)
+        if model+'_load1' in pred_res.columns and model+'_load2' in pred_res.columns:
+            pred_res[model + '_load'] = pred_res[[model+'_load1', model+'_load2']].mean(axis=1, skipna=True)
         
         if model+'_error1' in pred_res.columns and model+'_error2' in pred_res.columns:
             pred_res[model + '_error'] = pred_res[[model+'_error1', model+'_error2']].mean(axis=1) 
@@ -189,7 +190,8 @@ def insert_data(data, collection):
 
 def prediction(time_now):
     '''
-    forecast electricity load
+    upload forecast electricity load to database
+    and return the prediciton result 
 
     time_now: point where to start making prediction
     time: time of first hour of 48 hours prediction
@@ -200,12 +202,13 @@ def prediction(time_now):
     #check missing data 
     data_1w = preprocess_predict(data_1w)
 
-    #model_cat = cat_boost.CatBoost(model_file="cat_model.json", format='json')
+    #model_cat = cat_boost.CatBoost(model_file="model/cat_model.json", format='json')
     #cat_pred = model_cat.predict(data_1w)
 
-    #model_xgb = xg_boost.XGBoost(model_file="xgb_model.json")
+    #model_xgb = xg_boost.XGBoost(model_file="model/xgb_model.json")
     #xgb_pred = model_xgb.predict(data_1w)
-    model_lgb = lg_boost.LightGBM(model_file="lgb_model.txt")
+
+    model_lgb = lg_boost.LightGBM(model_file="model/lgb_model.txt")
     lgb_pred = model_lgb.predict(data_1w)
 
     #benchmark
@@ -231,6 +234,8 @@ def prediction(time_now):
             #                     'cat.load2':cat_pred[i], 'n48.load2': n48_pred[i], 'n168.load2': n168_pred[i]})
         
     insert_data(load_pred_df, pred_data) #update database
+
+    return load_pred_df #prediction result 
     pass
 
 def preprocess_predict(data_1w):
@@ -340,7 +345,7 @@ def retrain(time_now):
     #model_cat.model.save_model('./model/cat_model.json', format="json")
 
     model_lgb = lg_boost.LightGBM(data_3y) #train LigthGBM
-    model_lgb.model.save_model('./model/lgb_model.txt') #save model
+    model_lgb.model.save_model('model/lgb_model.txt') #save model
 
     #model_xbg = xg_boost.XGBoost(data_3y) #train XGBoost
     #model_xbg.model.save_model("./model/xbg_model.json") #save model

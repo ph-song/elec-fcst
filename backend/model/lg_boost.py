@@ -62,13 +62,11 @@ class LightGBM():
         #X_pred['load_kw'] = history_data['load_kw']
         X_pred = X_pred.dropna(axis=0)
         X_pred.index = X_pred.index + pd.Timedelta(hours=24) #shift index time
-
         
         for i in range(len(X_pred)):
             #time = time_now + timedelta(hours=i) #increment 'time'
             X = X_pred.iloc[i,:] #1 hour of predictors
             lgb_pred.append(float(self.model.predict(X)))
-
 
         if len(lgb_pred) <=24:
             new_df = pd.DataFrame({'load_kw':lgb_pred}, index=pd.date_range(history_data.index[-1] + pd.Timedelta(hours=1), periods=len(lgb_pred), freq='H'))
