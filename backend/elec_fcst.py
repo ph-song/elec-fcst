@@ -11,8 +11,8 @@ from pprint import pprint
 import pandas as pd
 
 import model.lg_boost as lg_boost
-import model.xg_boost as xg_boost
-import model.cat_boost as cat_boost
+#import model.xg_boost as xg_boost
+#import model.cat_boost as cat_boost
 import xgboost as xgb
 import lightgbm as lgb
 import catboost as ctb
@@ -77,6 +77,7 @@ def upload():
     '''
     file = request.files['zip_file']  
     dfs = extract(file) #extract data from zipped file
+    
     df_true, df_pred = process_data(dfs) #process dataframes
 
     time_now = df_true['time'].iloc[-1] + timedelta(hours=1) #time now
@@ -252,7 +253,7 @@ def preprocess_predict(data_1w):
         expected_datetimes = [start_datetime + timedelta(hours=i) for i in range((end_datetime - start_datetime).days * 24 + 1)]
         missing_date = [dt for dt in expected_datetimes if dt not in datetimes]
 
-        if len(data_1w)<(168-24): #more than
+        if len(data_1w)<(168-24): #more than 1 missing day of data
             if bool(missing_date):
                 raise_error('missing data' + str(missing_date[0]) + 'and' +  str(missing_date[-1])) 
             else: 

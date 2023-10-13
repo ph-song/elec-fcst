@@ -51,7 +51,6 @@ class LightGBM():
         return train_val_data[:int(n*0.9)], train_val_data[int(n*0.9):]
 
     def predict(self, history_data, lgb_pred=None):
-        #print(history_data.index, 123123)
         if lgb_pred == None:
             lgb_pred = []
         X_pred = pd.DataFrame([])
