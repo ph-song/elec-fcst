@@ -168,7 +168,7 @@ def process_data(dfs):
             insert_data(data = df_true, collection=actual_data) #insert database
 
         else:
-            raise_error('unexpected number of column')
+            raise_error('unexpected number of columns')
     
     return df_true, df_pred
 
@@ -353,7 +353,7 @@ def retrain(time_now):
 
 @app.route('/')
 def raise_error(error_msg: str, code = 400):
-    abort(Response(error_msg, code))
+    abort(code, error_msg)
 
 
 if __name__ == '__main__':
