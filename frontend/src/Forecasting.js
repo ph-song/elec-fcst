@@ -32,7 +32,7 @@ function Forecasting() {
       console.log(response.data)
 
       //model prediction
-      const labels = response.data.actual.map((item) => new Date(new Date(item.time).toLocaleString('en-US', { timeZone: 'Australia/Sydney' })));
+      const labels = response.data.actual.map(item => new Date(item.time.toLocaleString('en-US', { timeZone: 'Australia/Sydney' })));
       const values = response.data.actual.map((item) => item.load_kw/1000);
       const result = labels.map((value, index) => ({ x: value, y: values[index] }));
       
@@ -263,7 +263,7 @@ function Forecasting() {
           <Line data={chartData1} options={options1}/>
         </div>
 
-        <div className='row' style={{ margin: "10px"}}>
+        <div className='row' style={{ margin: "25px"}}>
           <H3 >Data Upload</H3>
           <FileInput className='col-xs-8 col-lg-6' fill={false} text={fileName} onInputChange={handleFile} large={true}/>
           <Button className='col-xs-2' onClick={handleUpload} disabled= {isLoading} large={true}> upload </Button>
