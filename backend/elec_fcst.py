@@ -72,17 +72,14 @@ def get_data():
 @app.route('/upload', methods = ['POST'])
 def upload():
     '''
-    data preprocessing, data formatting, upload data to database 
-    question: is it zip file or csv file
+    handle data uploaded by user
     '''
-    file = request.files['zip_file']  
+    file = request.files['zip_file']  # zipped file in request
     dfs = extract(file) #extract data from zipped file
-    
     df_true, df_pred = process_data(dfs) #process dataframes
-
     time_now = df_true['time'].iloc[-1] + timedelta(hours=1) #time now
-    if time_now.weekday() == 0: #retrain model if day of date is Monday
-        retrain(time_now)
+    #if time_now.weekday() == 0: #retrain model if day of date is Monday
+    #    retrain(time_now)
     evaluate(df_true, reference_time = time_now)
     prediction(time_now)
     
@@ -209,7 +206,7 @@ def prediction(time_now):
     #model_xgb = xg_boost.XGBoost(model_file="model/xgb_model.json")
     #xgb_pred = model_xgb.predict(data_1w)
 
-    model_lgb = lg_boost.LightGBM(model_file="model/lgb_model.txt")
+    model_lgb = lg_boost.LightGBM(model_file="./model/lgb_model.txt")
     lgb_pred = model_lgb.predict(data_1w)
 
     #benchmark
@@ -346,7 +343,7 @@ def retrain(time_now):
     #model_cat.model.save_model('./model/cat_model.json', format="json")
 
     model_lgb = lg_boost.LightGBM(data_3y) #train LigthGBM
-    model_lgb.model.save_model('model/lgb_model.txt') #save model
+    model_lgb.model.save_model('./model/lgb_model.txt') #save model
 
     #model_xbg = xg_boost.XGBoost(data_3y) #train XGBoost
     #model_xbg.model.save_model("./model/xbg_model.json") #save model
