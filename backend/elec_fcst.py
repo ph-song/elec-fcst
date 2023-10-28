@@ -178,13 +178,25 @@ def insert_data(data, collection):
         data = data.to_dict('records')
         
     for point in data:
+        #point = convert_to_nested(point)
         #if manage to find one, update the document
         is_exist = collection.find_one_and_update(filter = {'time':point["time"]}, 
-                          update = {'$set':point}) #replace if exist
+                          update = {'$set':point}) 
+        #replace if existx
         if not bool(is_exist):
             collection.insert_one(point) #insert 
 
     return True
+
+def convert_to_nested(data):
+    transformed_data = {}
+    for key, value in data.items():
+        if '.' in key:
+            main_key, sub_key = key.split('.')
+            transformed_data.setdefault(main_key, {})[sub_key] = value
+        else:
+            transformed_data[key] = value
+    return transformed_data
 
 def prediction(time_now):
     '''
@@ -198,7 +210,7 @@ def prediction(time_now):
     
 
     #check missing data 
-    data_1w = preprocess_predict(data_1w)
+    data_1w = preprocess_predict(data_1w, time_now)
 
     #model_cat = cat_boost.CatBoost(model_file="model/cat_model.json", format='json')
     #cat_pred = model_cat.predict(data_1w)
@@ -236,7 +248,7 @@ def prediction(time_now):
     return load_pred_df #prediction result 
     pass
 
-def preprocess_predict(data_1w):
+def preprocess_predict(data_1w, time_now):
     '''
     preprocess prediction data 
     if no missing data, return 
@@ -245,8 +257,10 @@ def preprocess_predict(data_1w):
     '''
     if len(data_1w)<168:
         datetimes = data_1w.index
-        start_datetime = min(datetimes)
-        end_datetime = max(datetimes) 
+        #start_datetime = min(datetimes)
+        #end_datetime = max(datetimes) 
+        end_datetime = time_now
+        start_datetime= end_datetime - timedelta(hours=167)
         expected_datetimes = [start_datetime + timedelta(hours=i) for i in range((end_datetime - start_datetime).days * 24 + 1)]
         missing_date = [dt for dt in expected_datetimes if dt not in datetimes]
 

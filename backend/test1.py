@@ -1,9 +1,6 @@
-from elec_fcst import process_data, prediction
-
-
+from elec_fcst import process_data
 import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype
-
 import pytest
 
 def test_process_data1():
@@ -20,7 +17,6 @@ def test_process_data1():
                          'wind_direction_deg','wind_speed_kmh'] # expected column names
     assert all(col_name in exp_pred_col_name for col_name in df_pred.columns) # check column names
     assert is_datetime64_any_dtype(df_pred['time']) # check data type
-
 
 def test_process_data2():
     df_test = pd.read_csv('./test_data/na_col_name.csv') # data with unrecognised column names
