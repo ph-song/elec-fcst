@@ -255,7 +255,6 @@ function Forecasting() {
 
     return (
       <div className="container">
-        
         <H1 >Electricity Demand</H1>
 
         <div className='row' style={{margin: "10px", position: "relative",height:"45vh",  width:"90vw"}}>
@@ -269,7 +268,7 @@ function Forecasting() {
           <Button className='col-xs-2' onClick={handleUpload} disabled= {isLoading} large={true}> upload </Button>
         </div>
 
-        <div className='row' style={{margin: "10px", osition: "relative", height:"45vh", width:"90vw"}}>
+        <div className='row' style={{margin: "10px", position: "relative", height:"45vh", width:"90vw"}}>
           <H3>Model Error</H3>
           <Line data={chartData2} options={options2}/>
         </div>
@@ -278,17 +277,12 @@ function Forecasting() {
           style={{position: 'absolute',top: '50%',left: '50%',
           transform: 'translate(-50%, -50%)',zIndex: 9999}}
           >
-          <ColorRing
-            visible={isLoading}
-            height="150"
-            width="150"
-            ariaLabel="blocks-loading"
-            wrapperStyle={{}}
-            wrapperClass="blocks-wrapper"
-            colors={['#e15b64', '#f47e60', '#f8b26a', '#abbd81', '#849b87']}
+          <ColorRing 
+            visible={isLoading} height="150" width="150"
+            ariaLabel="blocks-loading" wrapperStyle={{}}
+            wrapperClass="blocks-wrapper" colors={['#e15b64', '#f47e60', '#f8b26a', '#abbd81', '#849b87']}
           />
         </div>
-          
       </div>
     );
   }

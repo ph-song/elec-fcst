@@ -13,9 +13,6 @@ import pandas as pd
 import model.lg_boost as lg_boost
 #import model.xg_boost as xg_boost
 #import model.cat_boost as cat_boost
-import xgboost as xgb
-import lightgbm as lgb
-import catboost as ctb
 
 app = Flask(__name__)
 CORS(app)
@@ -74,14 +71,14 @@ def upload():
     '''
     handle data uploaded by user
     '''
-    file = request.files['zip_file']  # zipped file in request
-    dfs = extract(file) #extract data from zipped file
-    df_true, df_pred = process_data(dfs) #process dataframes
+    file = request.files['zip_file']            # zipped file in request
+    dfs = extract(file)                         # extract data from zipped file
+    df_true, df_pred = process_data(dfs)        # process dataframes
     time_now = df_true['time'].iloc[-1] + timedelta(hours=1) #time now
-    #if time_now.weekday() == 0: #retrain model if day of date is Monday
-    #    retrain(time_now)
-    evaluate(df_true, reference_time = time_now)
-    prediction(time_now)
+    if time_now.weekday() == 0:                 # retrain model if day of date is Monday
+        retrain(time_now)
+    evaluate(df_true, reference_time = time_now)# evaluate performance of model the day before
+    prediction(time_now)                        # make prediction
     
     return 'data uploaded successfully', 200
 
